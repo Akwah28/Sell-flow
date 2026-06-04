@@ -1,0 +1,133 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- REUSABLE HELPERS ---
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(data) { return isSignedIn() && data.ownerId == request.auth.uid; }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function isVerifiedUser() { return isSignedIn() && request.auth.token.email_verified == true; }
+
+    // --- ENTITY VALIDATIONS ---
+
+    function isValidBusiness(data) {
+      return data.keys().hasAll(['name', 'description', 'currency', 'whatsappNumber', 'storeSlug', 'isVerified', 'ownerId'])
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 100
+        && data.description is string && data.description.size() <= 1000
+        && data.currency is string && data.currency.size() == 3
+        && data.whatsappNumber is string && data.whatsappNumber.size() <= 30
+        && data.storeSlug is string && data.storeSlug.size() > 0 && data.storeSlug.size() <= 50
+        && data.isVerified is bool
+        && data.ownerId == request.auth.uid
+        && (data.get('logo', '') is string && data.get('logo', '').size() <= 1000)
+        && (data.get('whatsappToken', '') is string && data.get('whatsappToken', '').size() <= 2000)
+        && (data.get('whatsappPhoneId', '') is string && data.get('whatsappPhoneId', '').size() <= 100)
+        && (data.get('whatsappBusinessAccountId', '') is string && data.get('whatsappBusinessAccountId', '').size() <= 100);
+    }
+
+    function isValidProduct(data) {
+      return data.keys().hasAll(['name', 'price', 'type', 'ownerId', 'isActive'])
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 100
+        && data.price is number && data.price >= 0
+        && data.type in ['physical', 'digital', 'service']
+        && data.ownerId == request.auth.uid
+        && data.isActive is bool
+        && (data.get('images', []).size() <= 4);
+    }
+
+    function isValidLead(data) {
+      return data.keys().hasAll(['name', 'phone', 'status', 'ownerId'])
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 100
+        && data.phone is string && data.phone.size() >= 7 && data.phone.size() <= 20
+        && data.status in ['new', 'contacted', 'interested', 'paid', 'lost']
+        && data.ownerId is string && data.ownerId.size() > 0
+        && exists(/databases/$(database)/documents/businesses/$(data.ownerId));
+    }
+
+    function isValidOrder(data) {
+      return data.keys().hasAll(['leadId', 'productId', 'amount', 'paymentStatus', 'fulfillmentStatus', 'ownerId', 'createdAt'])
+        && data.leadId is string
+        && data.productId is string
+        && data.amount is number
+        && data.paymentStatus in ['pending', 'paid']
+        && data.fulfillmentStatus in ['pending', 'paid', 'processing', 'delivered', 'completed']
+        && data.ownerId == request.auth.uid
+        && exists(/databases/$(database)/documents/businesses/$(data.ownerId));
+    }
+
+    function isValidReview(data) {
+      return data.keys().hasAll(['productId', 'customerName', 'rating', 'comment', 'ownerId', 'createdAt'])
+        && data.productId is string
+        && data.customerName is string && data.customerName.size() > 0
+        && data.rating is number && data.rating >= 1 && data.rating <= 5
+        && data.comment is string && data.comment.size() > 0
+        && data.ownerId is string
+        && exists(/databases/$(database)/documents/businesses/$(data.ownerId));
+    }
+
+    function isValidSlugMapping(data) {
+      return data.keys().hasAll(['ownerId', 'businessName'])
+        && data.keys().size() == 2
+        && data.ownerId is string && data.ownerId.size() > 0
+        && data.businessName is string && data.businessName.size() > 0;
+    }
+
+    // --- COLLECTIONS ---
+
+    match /slugs/{slug} {
+      allow get, list: if true;
+      allow create, update: if isSignedIn() && incoming().ownerId == request.auth.uid && isValidSlugMapping(incoming());
+      allow delete: if isSignedIn() && existing().ownerId == request.auth.uid;
+    }
+
+    match /businesses/{businessId} {
+      allow get: if true; // Public for storefront
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isSignedIn() && request.auth.uid == businessId && isValidBusiness(incoming());
+      allow update: if isSignedIn() && request.auth.uid == businessId && isValidBusiness(incoming()) 
+        && incoming().ownerId == request.auth.uid;
+      allow delete: if false; 
+    }
+
+    match /products/{productId} {
+      allow get: if true; 
+      allow list: if (isSignedIn() && resource.data.ownerId == request.auth.uid) || (resource.data.isActive == true);
+      allow create: if isSignedIn() && isValidProduct(incoming());
+      allow update: if isOwner(existing()) && isValidProduct(incoming()) 
+        && incoming().ownerId == existing().ownerId;
+      allow delete: if isOwner(existing());
+    }
+
+    match /leads/{leadId} {
+      allow get: if isOwner(existing());
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isValidLead(incoming()); // Allow public lead creation
+      allow update: if isOwner(existing()) && isValidLead(incoming()) 
+        && incoming().ownerId == existing().ownerId;
+      allow delete: if isOwner(existing());
+    }
+
+    match /orders/{orderId} {
+      allow get, list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isSignedIn() && isValidOrder(incoming());
+      allow update: if isOwner(existing()) && isValidOrder(incoming())
+        && incoming().ownerId == existing().ownerId;
+      allow delete: if isOwner(existing());
+    }
+
+    match /reviews/{reviewId} {
+      allow get, list: if true; // Reviews are public
+      allow create: if isValidReview(incoming());
+      allow update: if isOwner(existing()) && isValidReview(incoming())
+        && incoming().ownerId == existing().ownerId;
+      allow delete: if isOwner(existing());
+    }
+  }
+}

@@ -1,0 +1,120 @@
+{
+  "entities": {
+    "BusinessProfile": {
+      "title": "Business Profile",
+      "description": "User business settings and WhatsApp credentials",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "currency": { "type": "string" },
+        "whatsappNumber": { "type": "string" },
+        "whatsappToken": { "type": "string" },
+        "whatsappPhoneId": { "type": "string" },
+        "whatsappBusinessAccountId": { "type": "string" },
+        "storeSlug": { "type": "string" },
+        "isVerified": { "type": "boolean" },
+        "ownerId": { "type": "string" }
+      },
+      "required": ["name", "whatsappNumber", "storeSlug", "ownerId"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Product in the catalog",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "price": { "type": "number" },
+        "description": { "type": "string" },
+        "images": { "type": "array", "items": { "type": "string" } },
+        "type": { "type": "string", "enum": ["physical", "digital", "service"] },
+        "isActive": { "type": "boolean" },
+        "stock": { "type": "number" },
+        "ownerId": { "type": "string" }
+      },
+      "required": ["name", "price", "type", "ownerId", "isActive"]
+    },
+    "Lead": {
+      "title": "Lead",
+      "description": "Potential customer lead",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "source": { "type": "string" },
+        "interest": { "type": "string" },
+        "status": { "type": "string", "enum": ["new", "contacted", "interested", "paid", "lost"] },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "ownerId": { "type": "string" }
+      },
+      "required": ["name", "phone", "status", "ownerId"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Customer order",
+      "type": "object",
+      "properties": {
+        "leadId": { "type": "string" },
+        "productId": { "type": "string" },
+        "amount": { "type": "number" },
+        "paymentStatus": { "type": "string", "enum": ["pending", "paid"] },
+        "fulfillmentStatus": { "type": "string", "enum": ["pending", "paid", "processing", "delivered", "completed"] },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "ownerId": { "type": "string" }
+      },
+      "required": ["leadId", "productId", "amount", "paymentStatus", "fulfillmentStatus", "createdAt", "ownerId"]
+    },
+    "Review": {
+      "title": "Review",
+      "description": "Product review",
+      "type": "object",
+      "properties": {
+        "productId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "rating": { "type": "number" },
+        "comment": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "ownerId": { "type": "string" }
+      },
+      "required": ["productId", "customerName", "rating", "comment", "createdAt", "ownerId"]
+    },
+    "SlugMapping": {
+      "title": "Slug Mapping",
+      "description": "Public map of storefront slugs to their business owners",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string" },
+        "businessName": { "type": "string" }
+      },
+      "required": ["ownerId", "businessName"]
+    }
+  },
+  "firestore": {
+    "/slugs/{slug}": {
+      "schema": "SlugMapping",
+      "description": "Mapping from storefront slug to business owner UID"
+    },
+    "/businesses/{businessId}": {
+      "schema": "BusinessProfile",
+      "description": "Business settings for each user"
+    },
+    "/products/{productId}": {
+      "schema": "Product",
+      "description": "Products listed by businesses"
+    },
+    "/leads/{leadId}": {
+      "schema": "Lead",
+      "description": "Sales leads for each business"
+    },
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Customer orders"
+    },
+    "/reviews/{reviewId}": {
+      "schema": "Review",
+      "description": "Product reviews"
+    }
+  }
+}

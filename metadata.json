@@ -1,0 +1,6 @@
+{
+  "name": "mysellflow",
+  "description": "A comprehensive sales management tool for WhatsApp sellers in Nigeria to track leads, follow-ups, products, and orders.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
