@@ -85,7 +85,9 @@ const INITIAL_BUSINESS: BusinessProfile = {
   whatsappBusinessAccountId: "",
   ownerId: "",
   metaTitle: "",
-  metaDescription: ""
+  metaDescription: "",
+  storefrontUrl: "",
+  subdomain: ""
 };
 
 const INITIAL_PRODUCTS: Product[] = [];
@@ -1500,11 +1502,56 @@ const SettingsPage = ({ business, setBusiness, onLogout, showToast }: { business
                       </p>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* Production Link */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {/* Direct Cloud Run URL */}
                       <div className="bg-white border border-slate-200/60 p-4 rounded-xl space-y-2 flex flex-col justify-between">
                         <div>
-                          <span className="text-[9px] font-black tracking-widest text-slate-400 uppercase">Production Subdomain URL</span>
+                          <span className="text-[9px] font-black tracking-widest text-violet-600 uppercase flex items-center gap-1">
+                            <span>Direct Cloud Run URL</span>
+                          </span>
+                          <p className="text-[8px] text-slate-400 leading-normal mb-1">
+                            Official secure storefront URL hosted on Google Cloud. This handles paths, add-to-carts, payments, and invoices instantly.
+                          </p>
+                          <p className="text-xs font-mono font-bold text-slate-800 select-all leading-relaxed truncate">
+                            https://sellflow-765078704458.europe-west2.run.app/{localBusiness.storeSlug || 'shop'}
+                          </p>
+                        </div>
+                        <div className="flex gap-2 pt-2 border-t border-slate-100 mt-2">
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const link = `https://sellflow-765078704458.europe-west2.run.app/${localBusiness.storeSlug || 'shop'}`;
+                              try {
+                                await navigator.clipboard.writeText(link);
+                                if (showToast) showToast("Direct Cloud Run link copied!", "success");
+                              } catch (e) {
+                                console.error(e);
+                              }
+                            }}
+                            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-violet-50 hover:bg-violet-100 border border-violet-100 text-violet-700 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all"
+                          >
+                            <Copy size={11} /> Copy
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const link = `https://sellflow-765078704458.europe-west2.run.app/${localBusiness.storeSlug || 'shop'}`;
+                              window.open(link, '_blank');
+                            }}
+                            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-[10px] font-black uppercase tracking-wider transition-all"
+                          >
+                            <ExternalLink size={11} /> Open
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Custom Subdomain */}
+                      <div className="bg-white border border-slate-200/60 p-4 rounded-xl space-y-2 flex flex-col justify-between">
+                        <div>
+                          <span className="text-[9px] font-black tracking-widest text-slate-400 uppercase">Custom Subdomain URL</span>
+                          <p className="text-[8px] text-slate-400 leading-normal mb-1">
+                            Your custom brand web address setup in Hostinger. Create a Hostinger redirect/forwarding record pointing here to your Direct Cloud Run URL.
+                          </p>
                           <p className="text-xs font-mono font-bold text-slate-800 select-all leading-relaxed truncate">
                             {localBusiness.storeSlug || 'shop'}.mysellflow.store
                           </p>
@@ -1516,7 +1563,7 @@ const SettingsPage = ({ business, setBusiness, onLogout, showToast }: { business
                               const link = `https://${localBusiness.storeSlug || 'shop'}.mysellflow.store`;
                               try {
                                 await navigator.clipboard.writeText(link);
-                                if (showToast) showToast("Production subdomain link copied!", "success");
+                                if (showToast) showToast("Custom subdomain link copied!", "success");
                               } catch (e) {
                                 console.error(e);
                               }
@@ -1534,7 +1581,7 @@ const SettingsPage = ({ business, setBusiness, onLogout, showToast }: { business
                             }}
                             className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all"
                           >
-                            <Share2 size={11} /> Share
+                            <Share2 size={11} /> WhatsApp
                           </button>
                         </div>
                       </div>
@@ -1542,11 +1589,11 @@ const SettingsPage = ({ business, setBusiness, onLogout, showToast }: { business
                       {/* Local Sandbox Testing Link */}
                       <div className="bg-white border border-slate-200/60 p-4 rounded-xl space-y-2 flex flex-col justify-between">
                         <div>
-                          <span className="text-[9px] font-black tracking-widest text-sky-600 uppercase flex items-center gap-1">
-                            <span>Sandbox Testing Link</span>
+                          <span className="text-[9px] font-black tracking-widest text-violet-600 uppercase flex items-center gap-1">
+                            <span>Sandbox Preview Link</span>
                           </span>
                           <p className="text-[8px] text-slate-400 leading-normal mb-1">
-                            Note: Wildcards are active for production (.mysellflow.store). For Sandbox preview inside AI Studio, use this query-based link:
+                            For previewing your store styles directly inside the secure AI Studio iframe/development workflow using sandbox query parameter mapping.
                           </p>
                           <p className="text-xs font-mono font-bold text-slate-800 select-all leading-relaxed truncate">
                             {window.location.host}/?store={localBusiness.storeSlug || 'shop'}
@@ -1559,14 +1606,14 @@ const SettingsPage = ({ business, setBusiness, onLogout, showToast }: { business
                               const link = `${window.location.protocol}//${window.location.host}/?store=${localBusiness.storeSlug || 'shop'}`;
                               try {
                                 await navigator.clipboard.writeText(link);
-                                if (showToast) showToast("Sandbox test link copied! Open in new tab.", "success");
+                                if (showToast) showToast("Sandbox preview link copied!", "success");
                               } catch (e) {
                                 console.error(e);
                               }
                             }}
-                            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-sky-50 hover:bg-sky-100 border border-sky-100 text-sky-700 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all"
+                            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-violet-50 hover:bg-violet-100 border border-violet-100 text-violet-700 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all"
                           >
-                            <Copy size={11} /> Copy Test URL
+                            <Copy size={11} /> Copy
                           </button>
                           <button
                             type="button"
@@ -1576,7 +1623,7 @@ const SettingsPage = ({ business, setBusiness, onLogout, showToast }: { business
                             }}
                             className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-[10px] font-black uppercase tracking-wider transition-all"
                           >
-                            <ExternalLink size={11} /> Open Store
+                            <ExternalLink size={11} /> Open
                           </button>
                         </div>
                       </div>
@@ -1703,6 +1750,68 @@ const SettingsPage = ({ business, setBusiness, onLogout, showToast }: { business
   );
 };
 
+// Helper to identify if a path is a storefront slug in routing
+const isStorefrontSlug = (path: string): boolean => {
+  if (!path) return false;
+  if (path.includes('.')) return false;
+  const reserved = ['assets', 'api', 'dashboard', 'products', 'leads', 'followups', 'orders', 'reviews', 'settings', 'index.html'];
+  if (reserved.includes(path.toLowerCase())) return false;
+  return /^[a-zA-Z0-9_\-]+$/.test(path);
+};
+
+// Helper to resolve storefront slug via subdomain, sandbox query parameter, or pathname
+const resolveStorefrontSlug = (): string | null => {
+  // 1. Allow testing on localhost and run.app environments via a URL query parameter (?store=joyfashion)
+  const urlParams = new URLSearchParams(window.location.search);
+  const testStore = urlParams.get('store') || urlParams.get('preview');
+  if (testStore) {
+    const cleanTest = testStore.toLowerCase().trim();
+    if (isStorefrontSlug(cleanTest)) {
+      return cleanTest;
+    }
+  }
+
+  // 2. Extract subdomain on custom domain
+  const host = window.location.hostname.toLowerCase().trim();
+  const hostWithoutPort = host.split(':')[0];
+  
+  const mainDomain = "mysellflow.store";
+  if (hostWithoutPort.endsWith(mainDomain)) {
+    const sIndex = hostWithoutPort.lastIndexOf(mainDomain);
+    const subPart = hostWithoutPort.substring(0, sIndex);
+    const cleanSub = subPart.replace(/\.$/, '').trim();
+    
+    if (cleanSub) {
+      // Check reserved
+      const reserved = ['www', 'admin', 'api', 'app', 'sales', 'dashboard', 'support', 'mail', 'blog'];
+      if (!reserved.includes(cleanSub) && isStorefrontSlug(cleanSub)) {
+        return cleanSub;
+      }
+    }
+  }
+  
+  // 3. Support subdomains on localhost for local developer testing (e.g. joyasfashion.localhost:3000)
+  if (hostWithoutPort.endsWith('localhost') || hostWithoutPort.includes('127.0.0.1')) {
+    const parts = hostWithoutPort.split('.');
+    if (parts.length > 1) {
+      const sub = parts[0].trim();
+      const reserved = ['www', 'admin', 'api', 'localhost'];
+      if (!reserved.includes(sub) && isStorefrontSlug(sub)) {
+        return sub;
+      }
+    }
+  }
+
+  // 4. Fallback to path-based storefront slug (e.g. `sellflow-*.run.app/Akwah` or `mysellflow.store/joysfashion`)
+  const pathname = window.location.pathname.replace(/^\/+|\/+$/g, '').toLowerCase().trim();
+  const firstPathSegment = pathname.split('/')[0];
+  if (isStorefrontSlug(firstPathSegment)) {
+    return firstPathSegment;
+  }
+
+  return null;
+};
+
 const StorefrontPreview = ({ 
   business, 
   products, 
@@ -1718,6 +1827,9 @@ const StorefrontPreview = ({
   onStoreLead: (name: string, phone: string, interest: string) => void,
   isPreview?: boolean
 }) => {
+  const isPublicRoute = resolveStorefrontSlug() !== null;
+  const activePreviewMode = isPreview && !isPublicRoute;
+
   const [isInquiryOpen, setIsInquiryOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [name, setName] = useState('');
@@ -1875,7 +1987,7 @@ const StorefrontPreview = ({
   }, [products, selectedCategory, searchQuery]);
 
   // -- BRANCH 1: SMARTPHONE PREVIEW VIEW (for Dashboard Inline Preview) --
-  if (isPreview) {
+  if (activePreviewMode) {
     return (
       <div className="max-w-md mx-auto bg-white min-h-[80vh] shadow-2xl rounded-[3rem] border-[8px] border-slate-900 overflow-hidden flex flex-col relative">
         {/* Phone Header */}
@@ -2041,215 +2153,453 @@ const StorefrontPreview = ({
         {/* Customer Inquiry Form (Overlay) */}
         <AnimatePresence>
           {isInquiryOpen && (
-            <motion.div 
-              initial={{ y: "100%" }}
-              animate={{ y: 0 }}
-              exit={{ y: "100%" }}
-              transition={{ type: "spring", damping: 25, stiffness: 200 }}
-              className="absolute inset-0 z-50 bg-white flex flex-col pt-12"
-            >
-              <div className="p-6 flex justify-between items-center border-b border-slate-100">
-                <div>
-                  <h3 className="text-lg font-black text-slate-900 uppercase italic tracking-tighter">{selectedProduct ? 'Order Inquiry' : 'Send Inquiry'}</h3>
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">To: {business.name}</p>
+            activePreviewMode ? (
+              <motion.div 
+                key="preview-modal"
+                initial={{ y: "100%" }}
+                animate={{ y: 0 }}
+                exit={{ y: "100%" }}
+                transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                className="absolute inset-0 z-50 bg-white flex flex-col pt-12"
+              >
+                <div className="p-6 flex justify-between items-center border-b border-slate-100">
+                  <div>
+                    <h3 className="text-lg font-black text-slate-900 uppercase italic tracking-tighter">{selectedProduct ? 'Order Inquiry' : 'Send Inquiry'}</h3>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">To: {business.name}</p>
+                  </div>
+                  <button 
+                    onClick={() => {
+                      setIsInquiryOpen(false);
+                      setSelectedProduct(null);
+                    }}
+                    className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-500"
+                  >
+                    <Plus size={20} className="rotate-45" />
+                  </button>
                 </div>
-                <button 
-                  onClick={() => {
-                    setIsInquiryOpen(false);
-                    setSelectedProduct(null);
-                  }}
-                  className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-500"
-                >
-                  <Plus size={20} className="rotate-45" />
-                </button>
-              </div>
 
-              <div className="flex-1 overflow-y-auto no-scrollbar pb-20">
-                {/* Product Gallery in Inquiry */}
-                {selectedProduct && (
-                  <div className="p-6 space-y-4">
-                    <div className="flex gap-2 overflow-x-auto no-scrollbar px-1 pb-2">
-                      {selectedProduct.images.map((img, idx) => (
-                        <div key={idx} className="w-48 aspect-square shrink-0 rounded-2xl border border-slate-100 overflow-hidden shadow-md">
-                          <img src={img} className="w-full h-full object-cover" alt={`${selectedProduct.name} ${idx}`} referrerPolicy="no-referrer" />
-                        </div>
-                      ))}
-                    </div>
-                    <div className="bg-sky-50 p-4 rounded-2xl border border-sky-100">
-                      <p className="text-[10px] font-black text-sky-600 uppercase tracking-widest mb-1">Inquiry for:</p>
-                      <div className="flex justify-between items-center">
-                        <p className="text-sm font-bold text-slate-900">{selectedProduct.name}</p>
-                        <p className="text-sm font-black text-sky-600">{formatCurrency(selectedProduct.price, business.currency)}</p>
-                      </div>
-                      <div className="mt-4">
-                        <button 
-                          type="button"
-                          onClick={() => {
-                            addToCart(selectedProduct);
-                            setIsInquiryOpen(false);
-                            setIsCartOpen(true);
-                          }}
-                          className="w-full bg-sky-500 hover:bg-sky-600 text-white py-3 rounded-xl font-bold uppercase tracking-widest text-xs shadow-lg shadow-sky-500/20"
-                        >
-                          Add to Cart & Checkout
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {selectedProduct && (
-                  <div className="px-8 space-y-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h4 className="text-sm font-bold text-slate-900">Customer Reviews</h4>
-                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-none">
-                          {productReviews.length} {productReviews.length === 1 ? 'Review' : 'Reviews'}
-                        </p>
-                      </div>
-                      {averageRating && (
-                        <div className="flex items-center gap-1 bg-amber-50 text-amber-600 px-2 py-1 rounded-lg text-xs font-bold">
-                          <CheckCircle2 size={12} className="fill-amber-600 text-white" />
-                          {averageRating}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="space-y-4">
-                      {productReviews.map((review) => (
-                        <div key={review.id} className="border-b border-slate-50 pb-4 last:border-0">
-                          <div className="flex items-center justify-between mb-1">
-                            <p className="text-[10px] font-black text-slate-900 uppercase tracking-tighter italic underline decoration-sky-500">{review.customerName}</p>
-                            <div className="flex gap-0.5">
-                              {[1, 2, 3, 4, 5].map(star => (
-                                <CheckCircle2 key={star} size={10} className={star <= review.rating ? "text-amber-500 fill-amber-500 text-white" : "text-slate-200"} />
-                              ))}
-                            </div>
+                <div className="flex-1 overflow-y-auto no-scrollbar pb-20">
+                  {/* Product Gallery in Inquiry */}
+                  {selectedProduct && (
+                    <div className="p-6 space-y-4">
+                      <div className="flex gap-2 overflow-x-auto no-scrollbar px-1 pb-2">
+                        {selectedProduct.images.map((img, idx) => (
+                          <div key={idx} className="w-48 aspect-square shrink-0 rounded-2xl border border-slate-100 overflow-hidden shadow-md">
+                            <img src={img} className="w-full h-full object-cover" alt={`${selectedProduct.name} ${idx}`} referrerPolicy="no-referrer" />
                           </div>
-                          <p className="text-xs text-slate-500 leading-relaxed italic">{review.comment}</p>
-                        </div>
-                      ))}
-                      {productReviews.length === 0 && (
-                        <p className="text-[10px] text-slate-400 text-center italic serif">No reviews yet. Be the first to leave one!</p>
-                      )}
-                    </div>
-
-                    {!showReviewForm ? (
-                      <button 
-                        onClick={() => setShowReviewForm(true)}
-                        className="text-[10px] font-black uppercase text-sky-600 tracking-widest hover:underline block mx-auto pt-2"
-                      >
-                        Write a Review
-                      </button>
-                    ) : (
-                      <form onSubmit={handleReviewSubmit} className="bg-slate-50 p-6 rounded-2xl border border-slate-100 space-y-4">
+                        ))}
+                      </div>
+                      <div className="bg-sky-50 p-4 rounded-2xl border border-sky-100">
+                        <p className="text-[10px] font-black text-sky-600 uppercase tracking-widest mb-1">Inquiry for:</p>
                         <div className="flex justify-between items-center">
-                          <h5 className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Post a Review</h5>
-                          <button type="button" onClick={() => setShowReviewForm(false)} className="text-[10px] font-bold text-slate-400 underline italic">Cancel</button>
+                          <p className="text-sm font-bold text-slate-900">{selectedProduct.name}</p>
+                          <p className="text-sm font-black text-sky-600">{formatCurrency(selectedProduct.price, business.currency)}</p>
                         </div>
-                        <div className="space-y-2">
-                          <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Rating</label>
-                          <div className="flex gap-2">
-                            {[1, 2, 3, 4, 5].map(star => (
-                              <button 
-                                key={star} 
-                                type="button" 
-                                onClick={() => setReviewRating(star)}
-                                className={cn(
-                                  "w-10 h-10 rounded-xl flex items-center justify-center transition-all",
-                                  star <= reviewRating ? "bg-amber-100 text-amber-600" : "bg-white border border-slate-200 text-slate-300"
-                                )}
-                              >
-                                {star}
-                              </button>
-                            ))}
-                          </div>
+                        <div className="mt-4">
+                          <button 
+                            type="button"
+                            onClick={() => {
+                              addToCart(selectedProduct);
+                              setIsInquiryOpen(false);
+                              setIsCartOpen(true);
+                            }}
+                            className="w-full bg-sky-500 hover:bg-sky-600 text-white py-3 rounded-xl font-bold uppercase tracking-widest text-xs shadow-lg shadow-sky-500/20"
+                          >
+                            Add to Cart & Checkout
+                          </button>
                         </div>
-                        <div className="space-y-2">
-                          <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Name</label>
-                          <input 
-                            type="text" 
-                            value={reviewName}
-                            onChange={(e) => setReviewName(e.target.value)}
-                            placeholder="Your public name"
-                            className="w-full bg-white border border-slate-200 p-2 text-xs rounded-lg focus:outline-none focus:border-slate-900"
-                            required
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Comment</label>
-                          <textarea 
-                            value={reviewComment}
-                            onChange={(e) => setReviewComment(e.target.value)}
-                            placeholder="What do you think of this product?"
-                            rows={2}
-                            className="w-full bg-white border border-slate-200 p-2 text-xs rounded-lg focus:outline-none focus:border-slate-900 resize-none"
-                            required
-                          />
-                        </div>
-                        <button 
-                          type="submit"
-                          className="w-full bg-slate-900 text-white py-3 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-slate-900/10 active:scale-95 transition-transform"
-                        >
-                          Submit Review
-                        </button>
-                      </form>
-                    )}
-
-                    <div className="pt-8 pb-4 border-t border-slate-100">
-                      <h4 className="text-sm font-bold text-slate-900 mb-4">Contact for Purchase</h4>
-                    </div>
-                  </div>
-                )}
-
-                <form onSubmit={handleSubmit} className="p-8 space-y-6 pt-2">
-                  {!selectedProduct && (
-                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Subject:</p>
-                      <p className="text-sm font-bold text-slate-900">
-                        {isCartOpen && cart.length > 0 ? `Checkout (${cart.length} items)` : 'General Information Inquiry'}
-                      </p>
+                      </div>
                     </div>
                   )}
 
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Your Name</label>
-                    <input 
-                      type="text" 
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder="e.g. Ebuka Okafor"
-                      className="w-full border-b-2 border-slate-100 p-2 text-lg font-medium focus:outline-none focus:border-slate-900 transition-colors"
-                      required
-                    />
-                  </div>
+                  {selectedProduct && (
+                    <div className="px-8 space-y-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="text-sm font-bold text-slate-900">Customer Reviews</h4>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-none">
+                            {productReviews.length} {productReviews.length === 1 ? 'Review' : 'Reviews'}
+                          </p>
+                        </div>
+                        {averageRating && (
+                          <div className="flex items-center gap-1 bg-amber-50 text-amber-600 px-2 py-1 rounded-lg text-xs font-bold">
+                            <CheckCircle2 size={12} className="fill-amber-600 text-white" />
+                            {averageRating}
+                          </div>
+                        )}
+                      </div>
 
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">WhatsApp Number</label>
-                    <input 
-                      type="tel" 
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      placeholder="e.g. 08123456789"
-                      className="w-full border-b-2 border-slate-100 p-2 text-lg font-mono focus:outline-none focus:border-slate-900 transition-colors"
-                      required
-                    />
-                  </div>
+                      <div className="space-y-4">
+                        {productReviews.map((review) => (
+                          <div key={review.id} className="border-b border-slate-50 pb-4 last:border-0">
+                            <div className="flex items-center justify-between mb-1">
+                              <p className="text-[10px] font-black text-slate-900 uppercase tracking-tighter italic underline decoration-sky-500">{review.customerName}</p>
+                              <div className="flex gap-0.5">
+                                {[1, 2, 3, 4, 5].map(star => (
+                                  <CheckCircle2 key={star} size={10} className={star <= review.rating ? "text-amber-500 fill-amber-500 text-white" : "text-slate-200"} />
+                                ))}
+                              </div>
+                            </div>
+                            <p className="text-xs text-slate-500 leading-relaxed italic">{review.comment}</p>
+                          </div>
+                        ))}
+                        {productReviews.length === 0 && (
+                          <p className="text-[10px] text-slate-400 text-center italic serif">No reviews yet. Be the first to leave one!</p>
+                        )}
+                      </div>
 
-                  <div className="pt-8">
+                      {!showReviewForm ? (
+                        <button 
+                          onClick={() => setShowReviewForm(true)}
+                          className="text-[10px] font-black uppercase text-sky-600 tracking-widest hover:underline block mx-auto pt-2"
+                        >
+                          Write a Review
+                        </button>
+                      ) : (
+                        <form onSubmit={handleReviewSubmit} className="bg-slate-50 p-6 rounded-2xl border border-slate-100 space-y-4">
+                          <div className="flex justify-between items-center">
+                            <h5 className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Post a Review</h5>
+                            <button type="button" onClick={() => setShowReviewForm(false)} className="text-[10px] font-bold text-slate-400 underline italic">Cancel</button>
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Rating</label>
+                            <div className="flex gap-2">
+                              {[1, 2, 3, 4, 5].map(star => (
+                                <button 
+                                  key={star} 
+                                  type="button" 
+                                  onClick={() => setReviewRating(star)}
+                                  className={cn(
+                                    "w-10 h-10 rounded-xl flex items-center justify-center transition-all",
+                                    star <= reviewRating ? "bg-amber-100 text-amber-600" : "bg-white border border-slate-200 text-slate-300"
+                                  )}
+                                >
+                                  {star}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Name</label>
+                            <input 
+                              type="text" 
+                              value={reviewName}
+                              onChange={(e) => setReviewName(e.target.value)}
+                              placeholder="Your public name"
+                              className="w-full bg-white border border-slate-200 p-2 text-xs rounded-lg focus:outline-none focus:border-slate-900"
+                              required
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Comment</label>
+                            <textarea 
+                              value={reviewComment}
+                              onChange={(e) => setReviewComment(e.target.value)}
+                              placeholder="What do you think of this product?"
+                              rows={2}
+                              className="w-full bg-white border border-slate-200 p-2 text-xs rounded-lg focus:outline-none focus:border-slate-900 resize-none"
+                              required
+                            />
+                          </div>
+                          <button 
+                            type="submit"
+                            className="w-full bg-slate-900 text-white py-3 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-slate-900/10 active:scale-95 transition-transform"
+                          >
+                            Submit Review
+                          </button>
+                        </form>
+                      )}
+
+                      <div className="pt-8 pb-4 border-t border-slate-100">
+                        <h4 className="text-sm font-bold text-slate-900 mb-4">Contact for Purchase</h4>
+                      </div>
+                    </div>
+                  )}
+
+                  <form onSubmit={handleSubmit} className="p-8 space-y-6 pt-2">
+                    {!selectedProduct && (
+                      <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Subject:</p>
+                        <p className="text-sm font-bold text-slate-900">
+                          {isCartOpen && cart.length > 0 ? `Checkout (${cart.length} items)` : 'General Information Inquiry'}
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Your Name</label>
+                      <input 
+                        type="text" 
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="e.g. Ebuka Okafor"
+                        className="w-full border-b-2 border-slate-100 p-2 text-lg font-medium focus:outline-none focus:border-slate-900 transition-colors"
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">WhatsApp Number</label>
+                      <input 
+                        type="tel" 
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        placeholder="e.g. 08123456789"
+                        className="w-full border-b-2 border-slate-100 p-2 text-lg font-mono focus:outline-none focus:border-slate-900 transition-colors"
+                        required
+                      />
+                    </div>
+
+                    <div className="pt-8">
+                      <button 
+                        type="submit"
+                        className="w-full bg-emerald-500 text-white py-5 rounded-[2rem] font-black uppercase tracking-widest text-xs shadow-2xl shadow-emerald-500/20 active:scale-95 transition-transform"
+                      >
+                        Send to WhatsApp
+                      </button>
+                      <p className="mt-4 text-center text-[10px] text-slate-400 italic serif">
+                        This will notify the seller to reach out to you.
+                      </p>
+                    </div>
+                  </form>
+                </div>
+              </motion.div>
+            ) : (
+              <div 
+                key="real-modal-backdrop"
+                className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-md flex items-center justify-center p-4 md:p-6"
+                onClick={() => {
+                  setIsInquiryOpen(false);
+                  setSelectedProduct(null);
+                }}
+              >
+                <motion.div 
+                  initial={{ scale: 0.95, opacity: 0, y: 15 }}
+                  animate={{ scale: 1, opacity: 1, y: 0 }}
+                  exit={{ scale: 0.95, opacity: 0, y: 15 }}
+                  transition={{ type: "spring", damping: 25, stiffness: 220 }}
+                  className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="p-6 flex justify-between items-center border-b border-slate-100 bg-white shrink-0">
+                    <div>
+                      <h3 className="text-md sm:text-lg font-black text-slate-900 uppercase italic tracking-tighter">{selectedProduct ? 'Product Specs & Inquiry' : 'Send Inquiry'}</h3>
+                      <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">To: {business.name}</p>
+                    </div>
                     <button 
-                      type="submit"
-                      className="w-full bg-emerald-500 text-white py-5 rounded-[2rem] font-black uppercase tracking-widest text-xs shadow-2xl shadow-emerald-500/20 active:scale-95 transition-transform"
+                      onClick={() => {
+                        setIsInquiryOpen(false);
+                        setSelectedProduct(null);
+                      }}
+                      className="w-9 h-9 bg-slate-50 hover:bg-slate-100 rounded-full flex items-center justify-center text-slate-500 transition-colors shrink-0"
                     >
-                      Send to WhatsApp
+                      <Plus size={18} className="rotate-45" />
                     </button>
-                    <p className="mt-4 text-center text-[10px] text-slate-400 italic serif">
-                      This will notify the seller to reach out to you.
-                    </p>
                   </div>
-                </form>
+
+                  <div className="flex-1 overflow-y-auto no-scrollbar p-6 space-y-6">
+                    {/* Product Gallery in Inquiry */}
+                    {selectedProduct && (
+                      <div className="space-y-4">
+                        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1.5 font-sans">
+                          {selectedProduct.images && selectedProduct.images.length > 0 ? (
+                            selectedProduct.images.map((img, idx) => (
+                              <div key={idx} className="w-40 sm:w-48 aspect-square shrink-0 rounded-2xl border border-slate-100 overflow-hidden shadow-sm">
+                                <img src={img} className="w-full h-full object-cover" alt={`${selectedProduct.name} ${idx}`} referrerPolicy="no-referrer" />
+                              </div>
+                            ))
+                          ) : (
+                            <div className="w-40 sm:w-48 aspect-square shrink-0 rounded-2xl border border-slate-100 bg-slate-50 flex items-center justify-center text-slate-300">
+                              <ShoppingBag size={32} />
+                            </div>
+                          )}
+                        </div>
+                        
+                        <div className="bg-sky-50 p-4 rounded-2xl border border-sky-100">
+                          <p className="text-[10px] font-black text-sky-600 uppercase tracking-widest mb-1 font-sans">Inquiry details:</p>
+                          <div className="flex justify-between items-center gap-2">
+                            <p className="text-xs sm:text-sm font-bold text-slate-900 leading-snug">{selectedProduct.name}</p>
+                            <p className="text-xs sm:text-sm font-black text-sky-600 shrink-0">{formatCurrency(selectedProduct.price, business.currency)}</p>
+                          </div>
+                          <div className="mt-4">
+                            <button 
+                              type="button"
+                              onClick={() => {
+                                addToCart(selectedProduct);
+                                setIsInquiryOpen(false);
+                                setIsCartOpen(true);
+                              }}
+                              className="w-full bg-sky-500 hover:bg-sky-600 text-white py-3 rounded-xl font-bold uppercase tracking-widest text-[10px] sm:text-xs shadow-md shadow-sky-500/20 active:scale-[0.98] transition-all"
+                            >
+                              Add to Basket & View checkout
+                            </button>
+                          </div>
+                        </div>
+
+                        {selectedProduct.description && (
+                          <div className="border border-slate-100 bg-slate-50/50 p-4 rounded-2xl text-xs text-slate-600 leading-relaxed font-sans">
+                            <p className="font-extrabold text-slate-800 uppercase tracking-wider text-[10px] mb-1">Product Description:</p>
+                            {selectedProduct.description}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {selectedProduct && (
+                      <div className="space-y-6">
+                        <div className="flex items-center justify-between border-t border-slate-100 pt-4">
+                          <div>
+                            <h4 className="text-xs sm:text-sm font-bold text-slate-900">Customer Feedback</h4>
+                            <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest leading-none">
+                              {productReviews.length} {productReviews.length === 1 ? 'Review' : 'Reviews'}
+                            </p>
+                          </div>
+                          {averageRating && (
+                            <div className="flex items-center gap-1 bg-amber-50 text-amber-600 px-2 py-1 rounded-lg text-xs font-bold">
+                              <CheckCircle2 size={12} className="fill-amber-600 text-white" />
+                              {averageRating}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="space-y-4">
+                          {productReviews.map((review) => (
+                            <div key={review.id} className="border-b border-slate-50 pb-4 last:border-0 font-sans">
+                              <div className="flex items-center justify-between mb-1">
+                                <p className="text-[10px] font-black text-slate-900 uppercase tracking-tighter italic underline decoration-sky-500">{review.customerName}</p>
+                                <div className="flex gap-0.5">
+                                  {[1, 2, 3, 4, 5].map(star => (
+                                    <CheckCircle2 key={star} size={10} className={star <= review.rating ? "text-amber-500 fill-amber-500 text-white" : "text-slate-200"} />
+                                  ))}
+                                </div>
+                              </div>
+                              <p className="text-xs text-slate-500 leading-relaxed italic">{review.comment}</p>
+                            </div>
+                          ))}
+                          {productReviews.length === 0 && (
+                            <p className="text-[9px] text-slate-400 text-center italic serif">No reviews yet. Be the first to leave one!</p>
+                          )}
+                        </div>
+
+                        {!showReviewForm ? (
+                          <button 
+                            type="button"
+                            onClick={() => setShowReviewForm(true)}
+                            className="text-[9px] font-black uppercase text-sky-600 tracking-widest hover:underline block mx-auto pt-1 font-sans"
+                          >
+                            Write a Review
+                          </button>
+                        ) : (
+                          <form onSubmit={handleReviewSubmit} className="bg-slate-50 p-4 sm:p-6 rounded-2xl border border-slate-100 space-y-4 font-sans font-sans">
+                            <div className="flex justify-between items-center">
+                              <h5 className="text-[9px] font-black text-slate-900 uppercase tracking-widest">Post a Review</h5>
+                              <button type="button" onClick={() => setShowReviewForm(false)} className="text-[10px] font-bold text-slate-400 underline italic">Cancel</button>
+                            </div>
+                            <div className="space-y-2">
+                              <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Rating</label>
+                              <div className="flex gap-2">
+                                {[1, 2, 3, 4, 5].map(star => (
+                                  <button 
+                                    key={star} 
+                                    type="button" 
+                                    onClick={() => setReviewRating(star)}
+                                    className={cn(
+                                      "w-8 h-8 rounded-lg flex items-center justify-center transition-all text-xs font-bold",
+                                      star <= reviewRating ? "bg-amber-100 text-amber-600" : "bg-white border border-slate-200 text-slate-300"
+                                    )}
+                                  >
+                                    {star}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                            <div className="space-y-2">
+                              <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Name</label>
+                              <input 
+                                type="text" 
+                                value={reviewName}
+                                onChange={(e) => setReviewName(e.target.value)}
+                                placeholder="Your public name"
+                                className="w-full bg-white border border-slate-200 p-2 text-xs rounded-lg focus:outline-none focus:border-slate-900"
+                                required
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Comment</label>
+                              <textarea 
+                                value={reviewComment}
+                                onChange={(e) => setReviewComment(e.target.value)}
+                                placeholder="What do you think of this product?"
+                                rows={2}
+                                className="w-full bg-white border border-slate-200 p-2 text-xs rounded-lg focus:outline-none focus:border-slate-900 resize-none"
+                                required
+                              />
+                            </div>
+                            <button 
+                              type="submit"
+                              className="w-full bg-slate-900 text-white py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest shadow-md shadow-slate-900/10 active:scale-95 transition-transform"
+                            >
+                              Submit Review
+                            </button>
+                          </form>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="border-t border-slate-100 pt-6">
+                      <h4 className="text-xs sm:text-sm font-bold text-slate-900 mb-4 uppercase tracking-wider">Contact & Pay Seller</h4>
+                    </div>
+
+                    <form onSubmit={handleSubmit} className="space-y-6 pt-2 font-sans">
+                      {!selectedProduct && (
+                        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Subject:</p>
+                          <p className="text-sm font-bold text-slate-900">
+                            {isCartOpen && cart.length > 0 ? `Checkout (${cart.length} items)` : 'General Information Inquiry'}
+                          </p>
+                        </div>
+                      )}
+
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Your Name</label>
+                        <input 
+                          type="text" 
+                          value={name}
+                          onChange={(e) => setName(e.target.value)}
+                          placeholder="e.g. Ebuka Okafor"
+                          className="w-full border-b border-slate-100 p-2 text-sm sm:text-base font-medium focus:outline-none focus:border-slate-900 transition-colors bg-white/50"
+                          required
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">WhatsApp Number</label>
+                        <input 
+                          type="tel" 
+                          value={phone}
+                          onChange={(e) => setPhone(e.target.value)}
+                          placeholder="e.g. 08123456789"
+                          className="w-full border-b border-slate-100 p-2 text-sm sm:text-base font-mono focus:outline-none focus:border-slate-900 transition-colors bg-white/50"
+                          required
+                        />
+                      </div>
+
+                      <div className="pt-4">
+                        <button 
+                          type="submit"
+                          className="w-full bg-emerald-500 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg shadow-emerald-500/20 active:scale-95 transition-transform"
+                        >
+                          Send details to WhatsApp
+                        </button>
+                        <p className="mt-4 text-center text-[10px] text-slate-400 italic serif">
+                          This will notify the seller to reach out to you.
+                        </p>
+                      </div>
+                    </form>
+                  </div>
+                </motion.div>
               </div>
-            </motion.div>
+            )
           )}
         </AnimatePresence>
 
@@ -2369,6 +2719,9 @@ const StorefrontPreview = ({
   // -- BRANCH 2: THE REAL, EXPANSIVE FULL-SCREEN MERCHANT STOREFRONT VIEW --
   return (
     <div className="min-h-screen bg-slate-50/60 pb-20 flex flex-col font-sans text-slate-900 animate-fade-in">
+      <div className="w-full bg-red-600 sm:bg-red-700 text-white font-black text-center py-5 text-xl sm:text-3xl tracking-widest uppercase select-none z-[999] border-b-4 border-black animate-pulse flex items-center justify-center gap-4">
+        <span>🚨 BUILD TEST JUNE 2026 🚨</span>
+      </div>
       {/* 1. Brand Stickable Topbar */}
       <header className="bg-white/95 backdrop-blur-md border-b border-slate-200/60 sticky top-0 z-40 px-4 md:px-8 py-4 transition-all duration-300">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
@@ -2518,7 +2871,7 @@ const StorefrontPreview = ({
             <p className="text-slate-400 text-xs mt-1 max-w-xs mx-auto">There are no matching products inside this collection right now. Try adjustments.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 md:gap-8">
+          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6 md:gap-8">
             {filteredProducts.map((product) => {
               const prodReviews = reviews.filter(r => r.productId === product.id);
               const rating = prodReviews.length > 0 
@@ -2538,7 +2891,7 @@ const StorefrontPreview = ({
                   className="bg-white rounded-2xl border border-slate-150 shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 flex flex-col group cursor-pointer overflow-hidden relative"
                 >
                   {/* Thumbnail Cover */}
-                  <div className="aspect-square bg-slate-50/60 overflow-hidden flex items-center justify-center relative p-6 border-b border-slate-50">
+                  <div className="aspect-square bg-slate-50/60 overflow-hidden flex items-center justify-center relative p-2 sm:p-6 border-b border-slate-50">
                     {product.images?.[0] ? (
                       <img 
                         src={product.images[0]} 
@@ -2547,59 +2900,59 @@ const StorefrontPreview = ({
                         referrerPolicy="no-referrer"
                       />
                     ) : (
-                      <ShoppingBag size={48} strokeWidth={1} className="text-slate-300" />
+                      <ShoppingBag size={32} strokeWidth={1} className="text-slate-300" />
                     )}
                     
                     {discount && (
-                      <div className="absolute top-3 right-3 bg-red-500 text-white px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider shadow-sm z-10">
+                      <div className="absolute top-2 right-2 bg-red-500 text-white px-1.5 py-0.5 rounded-md text-[8px] sm:text-[9px] font-black uppercase tracking-wider shadow-sm z-10">
                         {discount}% OFF
                       </div>
                     )}
-                    <div className="absolute top-3 left-3 bg-white/90 backdrop-blur-md px-2 py-0.5 rounded-lg border border-slate-100 text-[8px] font-black uppercase tracking-widest text-slate-500">
+                    <div className="absolute top-2 left-2 bg-white/90 backdrop-blur-md px-1.5 py-0.5 rounded-md border border-slate-100 text-[7px] sm:text-[8px] font-black uppercase tracking-widest text-slate-500">
                       {product.type}
                     </div>
                   </div>
 
                   {/* Body Info */}
-                  <div className="p-4 flex-1 flex flex-col justify-between">
+                  <div className="p-3 sm:p-4 flex-1 flex flex-col justify-between">
                     <div>
-                      <h4 className="text-xs md:text-sm font-bold text-slate-800 line-clamp-2 leading-snug mb-2 group-hover:text-[#0ea5e9] transition-colors min-h-[38px]">
+                      <h4 className="text-[11px] sm:text-xs md:text-sm font-bold text-slate-800 line-clamp-2 leading-snug mb-1.5 group-hover:text-[#0ea5e9] transition-colors min-h-[32px] sm:min-h-[38px]">
                         {product.name}
                       </h4>
                       
-                      <div className="flex items-center gap-1 mb-3">
+                      <div className="flex items-center gap-1 mb-2">
                         <div className="flex">
                           {[1,2,3,4,5].map(star => (
-                            <Star key={star} size={9} className={star <= (rating ? Number(rating) : 5) ? (rating ? "text-amber-400 fill-amber-400" : "text-slate-200 fill-slate-200") : "text-slate-200 fill-slate-200"} />
+                            <Star key={star} size={8} className={star <= (rating ? Number(rating) : 5) ? (rating ? "text-amber-400 fill-amber-400" : "text-slate-200 fill-slate-200") : "text-slate-200 fill-slate-200"} />
                           ))}
                         </div>
-                        <span className="text-[9px] font-black text-slate-400">({prodReviews.length})</span>
+                        <span className="text-[8px] sm:text-[9px] font-black text-slate-400">({prodReviews.length})</span>
                       </div>
                     </div>
 
                     <div>
-                      <div className="flex items-baseline gap-2 mb-4">
-                        <span className="text-sm md:text-base font-black text-slate-900">{formatCurrency(product.price, business.currency)}</span>
+                      <div className="flex items-baseline gap-1 sm:gap-2 mb-3">
+                        <span className="text-xs sm:text-sm md:text-base font-black text-slate-900">{formatCurrency(product.price, business.currency)}</span>
                         {product.originalPrice && product.originalPrice > product.price && (
-                          <span className="text-[10px] md:text-xs text-slate-400 font-bold line-through">{formatCurrency(product.originalPrice, business.currency)}</span>
+                          <span className="text-[8px] sm:text-[10px] md:text-xs text-slate-400 font-bold line-through">{formatCurrency(product.originalPrice, business.currency)}</span>
                         )}
                       </div>
 
                       {/* Direct action targets */}
-                      <div className="grid grid-cols-5 gap-2">
+                      <div className="flex flex-col sm:flex-row gap-1.5 mt-auto">
                         <button 
                           onClick={(e) => {
                             e.stopPropagation();
                             setSelectedProduct(product);
                             setIsInquiryOpen(true);
                           }}
-                          className="col-span-2 bg-slate-50 hover:bg-slate-100 border border-slate-200/80 text-slate-700 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-colors outline-none"
+                          className="flex-1 bg-slate-50 hover:bg-slate-100 border border-slate-200/80 text-slate-700 py-2 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-wider transition-colors outline-none text-center"
                         >
                           Specs
                         </button>
                         <button 
                           onClick={(e) => addToCart(product, e)}
-                          className="col-span-3 bg-slate-900 hover:bg-slate-800 text-white py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-colors shadow-sm flex items-center justify-center gap-1 outline-none"
+                          className="flex-[1.5] bg-slate-900 hover:bg-slate-800 text-white py-2 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-colors shadow-sm flex items-center justify-center gap-0.5 outline-none"
                         >
                           <Plus size={10} strokeWidth={3} /> Add
                         </button>
@@ -2996,63 +3349,6 @@ const AuthScreen = ({ showToast }: { showToast?: (m: string, t?: 'success' | 'er
   );
 };
 
-// Helper to identify if a path is a storefront slug in routing
-const isStorefrontSlug = (path: string): boolean => {
-  if (!path) return false;
-  if (path.includes('.')) return false;
-  const reserved = ['assets', 'api', 'dashboard', 'products', 'leads', 'followups', 'orders', 'reviews', 'settings', 'index.html'];
-  if (reserved.includes(path.toLowerCase())) return false;
-  return /^[a-zA-Z0-9_\-]+$/.test(path);
-};
-
-// Helper to resolve storefront subdomain or sandbox query parameter
-const getSubdomainFromHostname = (hostname: string): string | null => {
-  const host = hostname.toLowerCase().trim();
-  const hostWithoutPort = host.split(':')[0];
-  
-  // 1. Allow testing on localhost and run.app environments via a URL query parameter (?store=joyfashion)
-  const urlParams = new URLSearchParams(window.location.search);
-  const testStore = urlParams.get('store') || urlParams.get('preview');
-  if (testStore) {
-    const cleanTest = testStore.toLowerCase().trim();
-    if (isStorefrontSlug(cleanTest)) {
-      return cleanTest;
-    }
-  }
-
-  // 2. Extract subdomain on custom domain
-  const mainDomain = "mysellflow.store";
-  if (hostWithoutPort.endsWith(mainDomain)) {
-    const sIndex = hostWithoutPort.lastIndexOf(mainDomain);
-    const subPart = hostWithoutPort.substring(0, sIndex);
-    const cleanSub = subPart.replace(/\.$/, '').trim();
-    
-    if (!cleanSub) return null; // Root domain
-    
-    // Check reserved
-    const reserved = ['www', 'admin', 'api', 'app', 'sales', 'dashboard', 'support', 'mail', 'blog'];
-    if (reserved.includes(cleanSub)) return null;
-    
-    if (isStorefrontSlug(cleanSub)) {
-      return cleanSub;
-    }
-  }
-  
-  // 3. Support subdomains on localhost for local developer testing (e.g. joyasfashion.localhost:3000)
-  if (hostWithoutPort.endsWith('localhost') || hostWithoutPort.includes('127.0.0.1')) {
-    const parts = hostWithoutPort.split('.');
-    if (parts.length > 1) {
-      const sub = parts[0].trim();
-      const reserved = ['www', 'admin', 'api', 'localhost'];
-      if (!reserved.includes(sub) && isStorefrontSlug(sub)) {
-        return sub;
-      }
-    }
-  }
-
-  return null;
-};
-
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -3109,11 +3405,11 @@ export default function App() {
 
   // Dynamic Public Storefront Hook
   useEffect(() => {
-    // 1. Resolve storefront slug via subdomain or sandbox testing query param
-    const slug = getSubdomainFromHostname(window.location.hostname);
+    // 1. Resolve storefront slug via subdomain, sandbox testing query param, or pathname
+    const slug = resolveStorefrontSlug();
     
     if (slug) {
-      console.log("Detected public buyer visiting storefront on subdomain/testing param for slug:", slug);
+      console.log("Detected public buyer visiting storefront for slug:", slug);
       setPublicSlug(slug);
       setIsPublicLoading(true);
       
@@ -3226,12 +3522,15 @@ export default function App() {
         } as BusinessProfile);
       } else {
         console.log("No business profile found, creating initial one...");
+        const initialSlug = (INITIAL_BUSINESS.storeSlug || 'shop').toLowerCase().trim();
         const newBusiness: BusinessProfile = {
           ...INITIAL_BUSINESS,
           name: user.displayName || 'New Business',
-          ownerId: user.uid
+          ownerId: user.uid,
+          storeSlug: initialSlug,
+          storefrontUrl: `https://sellflow-765078704458.europe-west2.run.app/${initialSlug}`,
+          subdomain: `${initialSlug}.mysellflow.store`
         };
-        const initialSlug = (newBusiness.storeSlug || 'shop').toLowerCase();
         setDoc(doc(db, 'slugs', initialSlug), {
           ownerId: user.uid,
           businessName: newBusiness.name
@@ -3549,16 +3848,21 @@ export default function App() {
     if (!user) return;
     try {
       const slug = (updatedBusiness.storeSlug || '').toLowerCase().trim();
-      if (slug) {
-        if (!isStorefrontSlug(slug)) {
-          showToast("Invalid storefront slug. Only letters, numbers, and dashes are allowed (no dots or special characters).", "error");
-          return;
-        }
-        await setDoc(doc(db, 'slugs', slug), {
-          ownerId: user.uid,
-          businessName: updatedBusiness.name
-        });
+      if (!isStorefrontSlug(slug)) {
+        showToast("Invalid storefront slug. Only letters, numbers, and dashes are allowed (no dots or special characters).", "error");
+        return;
       }
+      
+      // Normalize and calculated and save to Firestore
+      updatedBusiness.storeSlug = slug;
+      updatedBusiness.storefrontUrl = `https://sellflow-765078704458.europe-west2.run.app/${slug}`;
+      updatedBusiness.subdomain = `${slug}.mysellflow.store`;
+
+      await setDoc(doc(db, 'slugs', slug), {
+        ownerId: user.uid,
+        businessName: updatedBusiness.name
+      });
+      
       await setDoc(doc(db, 'businesses', user.uid), updatedBusiness);
       showToast("Settings saved successfully!", "success");
     } catch (e) {
@@ -3608,13 +3912,14 @@ export default function App() {
 
     if (publicBusiness) {
       return (
-        <div className="min-h-screen bg-slate-50 animate-fade-in">
+        <div className="min-h-screen w-full bg-slate-50 animate-fade-in">
           <StorefrontPreview 
             business={publicBusiness} 
             products={publicProducts} 
             reviews={publicReviews} 
             onAddReview={handlePublicAddReview} 
             onStoreLead={handlePublicStoreLead} 
+            isPreview={false}
           />
           <ToastContainer toasts={toasts} onClose={(id) => setToasts(prev => prev.filter(t => t.id !== id))} />
         </div>

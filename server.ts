@@ -13,11 +13,26 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Initialize Firebase for server-side subdomain lookup
-const firebaseConfigPath = path.join(process.cwd(), "firebase-applet-config.json");
-const firebaseConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, "utf-8"));
-const firebaseApp = initializeApp(firebaseConfig);
-const db = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
+// Lazy initialization of Firebase to prevent startup crashes if config is missing or invalid
+let dbInstance: any = null;
+
+function getDb(): any {
+  if (dbInstance) return dbInstance;
+  try {
+    const firebaseConfigPath = path.join(process.cwd(), "firebase-applet-config.json");
+    if (!fs.existsSync(firebaseConfigPath)) {
+      console.warn("WARNING: firebase-applet-config.json not found. Server-side Firestore features will be unavailable.");
+      return null;
+    }
+    const firebaseConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, "utf-8"));
+    const firebaseApp = initializeApp(firebaseConfig);
+    dbInstance = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
+    return dbInstance;
+  } catch (error) {
+    console.error("Failed to initialize Firebase lazily:", error);
+    return null;
+  }
+}
 
 // Helper to validate clean storefront slugs
 function isStorefrontSlug(path: string): boolean {
@@ -179,19 +194,39 @@ async function startServer() {
     app.use(express.static(distPath));
     
     app.get("*", async (req, res) => {
-      // Extract subdomain from request host
+      if (req.path === "/__build_test") {
+        return res.status(200).send("SERVER BUILD ACTIVE - JUNE 2026");
+      }
+
+      // 1. Extract subdomain from request host
       const host = req.headers.host;
       const subdomain = getSubdomainFromHost(host);
       
-      if (subdomain) {
-        console.log(`[Subdomain Gateway] Routing subdomain host: "${subdomain}"`);
+      let storeSlug: string | null = subdomain;
+      
+      // 2. If no subdomain, check for path-based storefront slug (e.g. /Akwah)
+      if (!storeSlug) {
+        const pathParts = req.path.replace(/^\/+|\/+$/g, '').trim().split('/');
+        const firstSegment = pathParts[0];
+        if (firstSegment && isStorefrontSlug(firstSegment)) {
+          storeSlug = firstSegment;
+        }
+      }
+      
+      if (storeSlug) {
+        console.log(`[Storefront Gateway] Routing storefront slug: "${storeSlug}"`);
         try {
+          const db = getDb();
+          if (!db) {
+            console.log(`[Storefront Gateway] Database not available, serving default index.html`);
+            return res.sendFile(path.join(distPath, "index.html"));
+          }
           // Query slugs collection for this storefront owner
-          const slugDocRef = doc(db, 'slugs', subdomain);
+          const slugDocRef = doc(db, 'slugs', storeSlug);
           const slugSnap = await getDoc(slugDocRef);
           
           if (!slugSnap.exists()) {
-            console.log(`[Subdomain Gateway] Storefront slug "${subdomain}" not found in Firestore.`);
+            console.log(`[Storefront Gateway] Storefront slug "${storeSlug}" not found in Firestore.`);
             // Return professional 404 HTML
             return res.status(404).send(`
               <!doctype html>
@@ -214,7 +249,7 @@ async function startServer() {
                     <div class="space-y-2">
                       <h1 class="text-2xl font-black uppercase tracking-tight italic">Storefront Offline</h1>
                       <p class="text-slate-400 text-sm leading-relaxed">
-                        The storefront <span class="text-sky-400 font-bold font-mono">${subdomain}</span> does not exist or has been deactivated on our marketplace system.
+                        The storefront <span class="text-sky-400 font-bold font-mono">${storeSlug}</span> does not exist or has been deactivated on our marketplace system.
                       </p>
                     </div>
                     <div class="pt-4 border-t border-slate-800">
@@ -259,7 +294,7 @@ async function startServer() {
             return res.send(htmlContent);
           }
         } catch (error) {
-          console.error(`[Subdomain Gateway] Lookup exception:`, error);
+          console.error(`[Storefront Gateway] Lookup exception:`, error);
         }
       }
       

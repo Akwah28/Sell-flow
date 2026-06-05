@@ -67,6 +67,8 @@ export interface BusinessProfile {
   ownerId: string;
   metaTitle?: string;
   metaDescription?: string;
+  storefrontUrl?: string;
+  subdomain?: string;
 }
 
 export interface Review {
