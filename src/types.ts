@@ -4,6 +4,7 @@
  */
 
 export type ProductType = 'physical' | 'digital' | 'service';
+export type InventoryStatus = 'in_stock' | 'low_stock' | 'out_of_stock';
 
 export interface Product {
   id: string;
@@ -16,6 +17,10 @@ export interface Product {
   isActive: boolean;
   stock?: number;
   ownerId: string;
+  isBestSeller?: boolean;
+  isNewArrival?: boolean;
+  isPromotion?: boolean;
+  inventoryStatus?: InventoryStatus;
 }
 
 export type LeadStatus = 'new' | 'contacted' | 'interested' | 'paid' | 'lost';
@@ -69,6 +74,9 @@ export interface BusinessProfile {
   metaDescription?: string;
   storefrontUrl?: string;
   subdomain?: string;
+  views?: number;
+  clicksMessageMerchant?: number;
+  clicksWhatsAppOrder?: number;
 }
 
 export interface Review {
@@ -79,4 +87,5 @@ export interface Review {
   comment: string;
   createdAt: string;
   ownerId: string; // Business owner
+  isRead?: boolean;
 }

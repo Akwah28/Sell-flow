@@ -14,6 +14,7 @@ service cloud.firestore {
     function existing() { return resource.data; }
     function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
     function isVerifiedUser() { return isSignedIn() && request.auth.token.email_verified == true; }
+    function isNumeric(val) { return val is int || val is float; }
 
     // --- ENTITY VALIDATIONS ---
 
@@ -26,20 +27,27 @@ service cloud.firestore {
         && data.storeSlug is string && data.storeSlug.size() > 0 && data.storeSlug.size() <= 50
         && data.isVerified is bool
         && data.ownerId == request.auth.uid
-        && (data.get('logo', '') is string && data.get('logo', '').size() <= 1000)
+        && (data.get('logo', '') is string && data.get('logo', '').size() <= 1048576)
         && (data.get('whatsappToken', '') is string && data.get('whatsappToken', '').size() <= 2000)
         && (data.get('whatsappPhoneId', '') is string && data.get('whatsappPhoneId', '').size() <= 100)
-        && (data.get('whatsappBusinessAccountId', '') is string && data.get('whatsappBusinessAccountId', '').size() <= 100);
+        && (data.get('whatsappBusinessAccountId', '') is string && data.get('whatsappBusinessAccountId', '').size() <= 100)
+        && isNumeric(data.get('views', 0))
+        && isNumeric(data.get('clicksMessageMerchant', 0))
+        && isNumeric(data.get('clicksWhatsAppOrder', 0));
     }
 
     function isValidProduct(data) {
       return data.keys().hasAll(['name', 'price', 'type', 'ownerId', 'isActive'])
         && data.name is string && data.name.size() > 0 && data.name.size() <= 100
-        && data.price is number && data.price >= 0
+        && isNumeric(data.price) && data.price >= 0
         && data.type in ['physical', 'digital', 'service']
         && data.ownerId == request.auth.uid
         && data.isActive is bool
-        && (data.get('images', []).size() <= 4);
+        && (data.get('images', []).size() <= 4)
+        && (data.get('isBestSeller', false) is bool)
+        && (data.get('isNewArrival', false) is bool)
+        && (data.get('isPromotion', false) is bool)
+        && (data.get('inventoryStatus', 'in_stock') in ['in_stock', 'low_stock', 'out_of_stock']);
     }
 
     function isValidLead(data) {
@@ -55,7 +63,7 @@ service cloud.firestore {
       return data.keys().hasAll(['leadId', 'productId', 'amount', 'paymentStatus', 'fulfillmentStatus', 'ownerId', 'createdAt'])
         && data.leadId is string
         && data.productId is string
-        && data.amount is number
+        && isNumeric(data.amount)
         && data.paymentStatus in ['pending', 'paid']
         && data.fulfillmentStatus in ['pending', 'paid', 'processing', 'delivered', 'completed']
         && data.ownerId == request.auth.uid
@@ -66,9 +74,10 @@ service cloud.firestore {
       return data.keys().hasAll(['productId', 'customerName', 'rating', 'comment', 'ownerId', 'createdAt'])
         && data.productId is string
         && data.customerName is string && data.customerName.size() > 0
-        && data.rating is number && data.rating >= 1 && data.rating <= 5
+        && isNumeric(data.rating) && data.rating >= 1 && data.rating <= 5
         && data.comment is string && data.comment.size() > 0
         && data.ownerId is string
+        && (data.get('isRead', false) is bool)
         && exists(/databases/$(database)/documents/businesses/$(data.ownerId));
     }
 
@@ -91,8 +100,12 @@ service cloud.firestore {
       allow get: if true; // Public for storefront
       allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
       allow create: if isSignedIn() && request.auth.uid == businessId && isValidBusiness(incoming());
-      allow update: if isSignedIn() && request.auth.uid == businessId && isValidBusiness(incoming()) 
-        && incoming().ownerId == request.auth.uid;
+      allow update: if (isSignedIn() && request.auth.uid == businessId && isValidBusiness(incoming()) && incoming().ownerId == request.auth.uid)
+        || (incoming().diff(existing()).affectedKeys().hasOnly(['views', 'clicksMessageMerchant', 'clicksWhatsAppOrder'])
+            && (!incoming().diff(existing()).affectedKeys().hasAny(['views']) || incoming().views == existing().get('views', 0) + 1)
+            && (!incoming().diff(existing()).affectedKeys().hasAny(['clicksMessageMerchant']) || incoming().get('clicksMessageMerchant', 0) == existing().get('clicksMessageMerchant', 0) + 1)
+            && (!incoming().diff(existing()).affectedKeys().hasAny(['clicksWhatsAppOrder']) || incoming().get('clicksWhatsAppOrder', 0) == existing().get('clicksWhatsAppOrder', 0) + 1)
+           );
       allow delete: if false; 
     }
 

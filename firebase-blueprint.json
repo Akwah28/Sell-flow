@@ -6,6 +6,7 @@
       "type": "object",
       "properties": {
         "name": { "type": "string" },
+        "logo": { "type": "string" },
         "description": { "type": "string" },
         "currency": { "type": "string" },
         "whatsappNumber": { "type": "string" },
@@ -14,6 +15,9 @@
         "whatsappBusinessAccountId": { "type": "string" },
         "storeSlug": { "type": "string" },
         "isVerified": { "type": "boolean" },
+        "views": { "type": "number" },
+        "clicksMessageMerchant": { "type": "number" },
+        "clicksWhatsAppOrder": { "type": "number" },
         "ownerId": { "type": "string" }
       },
       "required": ["name", "whatsappNumber", "storeSlug", "ownerId"]
@@ -30,7 +34,11 @@
         "type": { "type": "string", "enum": ["physical", "digital", "service"] },
         "isActive": { "type": "boolean" },
         "stock": { "type": "number" },
-        "ownerId": { "type": "string" }
+        "ownerId": { "type": "string" },
+        "isBestSeller": { "type": "boolean" },
+        "isNewArrival": { "type": "boolean" },
+        "isPromotion": { "type": "boolean" },
+        "inventoryStatus": { "type": "string", "enum": ["in_stock", "low_stock", "out_of_stock"] }
       },
       "required": ["name", "price", "type", "ownerId", "isActive"]
     },
@@ -76,7 +84,8 @@
         "rating": { "type": "number" },
         "comment": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" },
-        "ownerId": { "type": "string" }
+        "ownerId": { "type": "string" },
+        "isRead": { "type": "boolean" }
       },
       "required": ["productId", "customerName", "rating", "comment", "createdAt", "ownerId"]
     },

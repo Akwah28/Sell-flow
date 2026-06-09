@@ -10,7 +10,11 @@ import { getFirestore, doc, getDoc } from "firebase/firestore";
 
 dotenv.config();
 
-const __filename = fileURLToPath(import.meta.url);
+// Extremely robust resolution of __filename and __dirname to prevent ESM/CommonJS/Bundler mismatch crashes
+const __filename = (typeof import.meta !== "undefined" && import.meta && import.meta.url)
+  ? fileURLToPath(import.meta.url)
+  : path.join(process.cwd(), "server.ts");
+
 const __dirname = path.dirname(__filename);
 
 // Lazy initialization of Firebase to prevent startup crashes if config is missing or invalid
@@ -82,8 +86,26 @@ function getSubdomainFromHost(host: string | undefined): string | null {
 }
 
 async function startServer() {
+  // Startup validation block that runs when the server starts
+  const requiredEnvVars = [
+    "PORT",
+    "GOOGLE_API_KEY",
+    "FIREBASE_PROJECT_ID"
+  ];
+
+  const missing = requiredEnvVars.filter(
+    key => !process.env[key]
+  );
+
+  if (missing.length) {
+    console.error(
+      "Missing environment variables:",
+      missing
+    );
+  }
+
   const app = express();
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT) || 3000;
 
   app.use(express.json());
 
@@ -304,7 +326,7 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`Server listening on port ${PORT}`);
   });
 }
 
