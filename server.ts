@@ -6,7 +6,7 @@ import dotenv from "dotenv";
 import nodemailer from "nodemailer";
 import fs from "fs";
 import { initializeApp } from "firebase/app";
-import { getFirestore, doc, getDoc } from "firebase/firestore";
+import { initializeFirestore, doc, getDoc } from "firebase/firestore";
 
 dotenv.config();
 
@@ -30,7 +30,9 @@ function getDb(): any {
     }
     const firebaseConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, "utf-8"));
     const firebaseApp = initializeApp(firebaseConfig);
-    dbInstance = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
+    dbInstance = initializeFirestore(firebaseApp, {
+      experimentalForceLongPolling: true,
+    }, firebaseConfig.firestoreDatabaseId);
     return dbInstance;
   } catch (error) {
     console.error("Failed to initialize Firebase lazily:", error);

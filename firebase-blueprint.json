@@ -98,6 +98,32 @@
         "businessName": { "type": "string" }
       },
       "required": ["ownerId", "businessName"]
+    },
+    "PlatformReview": {
+      "title": "Platform Review",
+      "description": "Nicest way review left by users for the platform",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "role": { "type": "string" },
+        "rating": { "type": "number" },
+        "content": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["name", "rating", "content", "createdAt"]
+    },
+    "ContactMessage": {
+      "title": "Contact Message",
+      "description": "Messages sent from visitors on the contact form",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "businessType": { "type": "string" },
+        "message": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["name", "email", "message", "createdAt"]
     }
   },
   "firestore": {
@@ -124,6 +150,14 @@
     "/reviews/{reviewId}": {
       "schema": "Review",
       "description": "Product reviews"
+    },
+    "/platform_reviews/{reviewId}": {
+      "schema": "PlatformReview",
+      "description": "Reviews left by users for the platform itself"
+    },
+    "/contact_messages/{messageId}": {
+      "schema": "ContactMessage",
+      "description": "Contact form submissions"
     }
   }
 }

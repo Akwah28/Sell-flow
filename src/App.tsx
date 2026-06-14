@@ -38,9 +38,11 @@ import {
   Eye,
   EyeOff,
   ShieldAlert,
-  UploadCloud
+  UploadCloud,
+  ArrowLeft
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, animate } from 'framer-motion';
+import LandingPage from './components/LandingPage';
 import { 
   BarChart, 
   Bar, 
@@ -52,10 +54,10 @@ import {
   AreaChart,
   Area
 } from 'recharts';
-import { cn, formatCurrency } from './lib/utils';
+import { cn, formatCurrency, compressImage } from './lib/utils';
 import { Product, Lead, Order, FollowUp, BusinessProfile, Review, LeadStatus, OrderStatus, ProductType, InventoryStatus } from './types';
 import { sendWhatsAppMessage } from './services/whatsappService';
-import { db, auth } from './firebase';
+import { db, auth, OperationType, handleFirestoreError } from './firebase';
 import { 
   onAuthStateChanged, 
   signInWithPopup, 
@@ -114,52 +116,7 @@ const INITIAL_ORDERS: Order[] = [];
 const INITIAL_REVIEWS: Review[] = [];
 
 // --- FIREBASE ERROR HANDLING ---
-export enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  LIST = 'list',
-  GET = 'get',
-  WRITE = 'write',
-}
-
-interface FirestoreErrorInfo {
-  error: string;
-  operationType: OperationType;
-  path: string | null;
-  authInfo: {
-    userId?: string | null;
-    email?: string | null;
-    emailVerified?: boolean | null;
-    isAnonymous?: boolean | null;
-    tenantId?: string | null;
-    providerInfo?: {
-      providerId?: string | null;
-      email?: string | null;
-    }[];
-  }
-}
-
-export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData?.map(provider => ({
-        providerId: provider.providerId,
-        email: provider.email,
-      })) || []
-    },
-    operationType,
-    path
-  };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
-}
+// (Exposed and imported from ./firebase to avoid duplication)
 
 // --- COMPONENTS ---
 
@@ -216,10 +173,10 @@ const Card = ({ children, className }: { children: ReactNode, className?: string
 const Badge = ({ children, variant = 'default' }: { children: ReactNode, variant?: 'default' | 'success' | 'warning' | 'error' | 'info' }) => {
   const variants = {
     default: 'bg-slate-100 text-slate-700',
-    success: 'bg-emerald-100 text-emerald-700',
-    warning: 'bg-amber-100 text-amber-700',
-    error: 'bg-rose-100 text-rose-700',
-    info: 'bg-sky-100 text-sky-700'
+    success: 'bg-[#DCFCE7] text-[#22C55E] font-bold border border-[#22C55E]/15',
+    warning: 'bg-[#FFF7ED] text-[#F97316] font-bold border border-[#F97316]/15',
+    error: 'bg-rose-50 text-rose-700 font-bold border border-rose-200/40',
+    info: 'bg-[#EDE8FB] text-[#5B2FD4] font-bold border border-[#5B2FD4]/15'
   };
   return (
     <span className={cn("px-2 py-0.5 rounded-full text-xs font-medium uppercase tracking-wider", variants[variant])}>
@@ -269,16 +226,23 @@ const ProductModal = ({ isOpen, onClose, onSave, product }: { isOpen: boolean, o
 
   if (!isOpen) return null;
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files) {
-      Array.from(files).forEach((file: File) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setImages(prev => [...prev, reader.result as string].slice(0, 4));
-        };
-        reader.readAsDataURL(file);
-      });
+      const fileArray = Array.from(files) as File[];
+      for (const file of fileArray) {
+        try {
+          const compressed = await compressImage(file, 600, 0.7);
+          setImages(prev => [...prev, compressed].slice(0, 4));
+        } catch (err) {
+          console.error("Error compressing file:", err);
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            setImages(prev => [...prev, reader.result as string].slice(0, 4));
+          };
+          reader.readAsDataURL(file);
+        }
+      }
     }
   };
 
@@ -770,12 +734,12 @@ const Sidebar = ({ activePage, setActivePage, lowStockCount = 0, unseenReviewsCo
     <aside className="fixed left-0 top-0 h-screen w-64 bg-slate-900 text-slate-300 hidden lg:flex flex-col z-50 overflow-hidden">
       <div className="p-8">
         <div className="flex items-center gap-3 mb-8">
-          <div className="w-10 h-10 bg-sky-500 rounded-xl flex items-center justify-center text-white shadow-lg shadow-sky-500/20">
+          <div className="w-10 h-10 bg-[#5B2FD4] rounded-xl flex items-center justify-center text-white shadow-lg shadow-[#5B2FD4]/20">
             <TrendingUp size={24} />
           </div>
           <div>
             <h1 className="text-xl font-black text-white tracking-tighter italic uppercase leading-none">mysellflow</h1>
-            <p className="text-[10px] font-black text-sky-400 uppercase tracking-widest mt-1">Growth Hub</p>
+            <p className="text-[10px] font-black text-[#5B2FD4] uppercase tracking-widest mt-1">Growth Hub</p>
           </div>
         </div>
 
@@ -787,7 +751,7 @@ const Sidebar = ({ activePage, setActivePage, lowStockCount = 0, unseenReviewsCo
               className={cn(
                 "w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200 group relative",
                 activePage === item.id 
-                  ? "bg-sky-500 text-white font-bold shadow-lg shadow-sky-500/20" 
+                  ? "bg-[#5B2FD4] text-white font-bold shadow-lg shadow-[#5B2FD4]/20" 
                   : "hover:bg-slate-800 hover:text-white"
               )}
             >
@@ -830,33 +794,38 @@ const Sidebar = ({ activePage, setActivePage, lowStockCount = 0, unseenReviewsCo
 
 const MobileNav = ({ activePage, setActivePage, lowStockCount = 0, unseenReviewsCount = 0 }: { activePage: string, setActivePage: (p: string) => void, lowStockCount?: number, unseenReviewsCount?: number }) => {
   const menuItems = [
-    { id: 'dashboard', icon: LayoutDashboard },
-    { id: 'products', icon: ShoppingBag },
-    { id: 'leads', icon: Users },
-    { id: 'followups', icon: Clock },
-    { id: 'reviews', icon: Star },
-    { id: 'storefront', icon: Store },
+    { id: 'dashboard', icon: LayoutDashboard, label: 'dashboard' },
+    { id: 'products', icon: ShoppingBag, label: 'products' },
+    { id: 'leads', icon: Users, label: 'leads' },
+    { id: 'followups', icon: Clock, label: 'followups' },
+    { id: 'reviews', icon: Star, label: 'reviews' },
+    { id: 'storefront', icon: Store, label: 'storefront' },
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 h-16 bg-white border-t border-slate-200 flex lg:hidden items-center justify-around z-50 px-4">
+    <nav className="fixed bottom-0 left-0 right-0 h-20 bg-white border-t border-slate-200 flex lg:hidden items-center justify-around z-50 px-2 pb-safe">
       {menuItems.map((item) => (
         <button
           key={item.id}
           onClick={() => setActivePage(item.id)}
           className={cn(
-            "p-3 rounded-xl transition-all active:scale-90 relative",
-            activePage === item.id ? "bg-slate-900 text-white shadow-lg" : "text-slate-400"
+            "flex flex-col items-center justify-center p-2 rounded-xl transition-all active:scale-90 relative w-[4.5rem] h-[3.75rem]",
+            activePage === item.id 
+              ? "bg-[#5B2FD4] text-white shadow-lg shadow-[#5B2FD4]/20" 
+              : "text-slate-500 hover:text-slate-800"
           )}
         >
-          <item.icon size={20} strokeWidth={activePage === item.id ? 2.5 : 2} />
+          <item.icon size={18} strokeWidth={activePage === item.id ? 2.5 : 2} />
+          <span className="text-[9px] font-bold tracking-wider lowercase mt-1 text-center scale-95 sm:scale-100">
+            {item.label}
+          </span>
           {item.id === 'products' && lowStockCount > 0 && (
-            <span className="absolute top-1 right-1 bg-amber-500 text-slate-900 text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center border border-white leading-none shadow-sm animate-pulse">
+            <span className="absolute top-1 right-2 bg-amber-500 text-slate-900 text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center border border-white leading-none shadow-sm animate-pulse">
               {lowStockCount}
             </span>
           )}
           {item.id === 'reviews' && unseenReviewsCount > 0 && (
-            <span className="absolute top-1 right-1 bg-sky-500 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center border border-white leading-none shadow-sm animate-pulse">
+            <span className="absolute top-1 right-2 bg-sky-500 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center border border-white leading-none shadow-sm animate-pulse">
               {unseenReviewsCount}
             </span>
           )}
@@ -869,7 +838,7 @@ const MobileNav = ({ activePage, setActivePage, lowStockCount = 0, unseenReviews
 const UserProfile = ({ business, onClick }: { business: BusinessProfile, onClick: () => void }) => (
   <div className="fixed top-0 left-0 lg:left-64 right-0 h-16 bg-white/80 backdrop-blur-md border-b border-slate-100 z-40 px-4 md:px-8 flex items-center justify-between">
     <div className="flex items-center gap-3">
-      <div className="lg:hidden w-8 h-8 bg-sky-500 rounded-lg flex items-center justify-center text-white">
+      <div className="lg:hidden w-8 h-8 bg-[#5B2FD4] rounded-lg flex items-center justify-center text-white">
         <TrendingUp size={18} />
       </div>
       <h2 className="text-sm font-black text-slate-900 uppercase tracking-tighter lg:hidden italic">mysellflow</h2>
@@ -881,21 +850,21 @@ const UserProfile = ({ business, onClick }: { business: BusinessProfile, onClick
       >
         <div className="hidden sm:block">
           <div className="flex items-center justify-end gap-1 mb-0.5">
-            <p className="text-xs font-black text-slate-900 uppercase tracking-tighter leading-none italic underline decoration-sky-500 group-hover:decoration-slate-900 transition-colors">{business.name || 'My Shop'}</p>
-            {business.isVerified && <CheckCircle2 size={12} className="text-sky-500 fill-sky-500 text-white" />}
+            <p className="text-xs font-black text-slate-900 uppercase tracking-tighter leading-none italic underline decoration-[#5B2FD4] group-hover:decoration-slate-900 transition-colors">{business.name || 'My Shop'}</p>
+            {business.isVerified && <CheckCircle2 size={12} className="text-[#5B2FD4] fill-[#5B2FD4] text-white" />}
           </div>
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{business.storeSlug || 'shop'}.mysellflow.store</p>
         </div>
         <div className="relative shrink-0">
-          <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center transition-all group-hover:ring-2 group-hover:ring-sky-500/20 group-hover:scale-105">
+          <div className="w-8 h-8 rounded-full bg-[#5B2FD4] border border-[#5B2FD4]/20 overflow-hidden flex items-center justify-center transition-all group-hover:ring-2 group-hover:ring-[#5B2FD4]/20 group-hover:scale-105">
             {business.logo ? (
               <img src={business.logo} alt={business.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
             ) : (
-              <span className="text-xs font-bold uppercase text-slate-900">{(business.name || 'S')[0]}</span>
+              <span className="text-xs font-bold uppercase text-white">{(business.name || 'S')[0]}</span>
             )}
           </div>
           {business.isVerified && (
-            <div className="absolute -right-1 -bottom-1 w-3.5 h-3.5 bg-sky-500 rounded-full border-2 border-white flex items-center justify-center text-white">
+            <div className="absolute -right-1 -bottom-1 w-3.5 h-3.5 bg-[#5B2FD4] rounded-full border-2 border-white flex items-center justify-center text-white">
               <CheckCircle2 size={7} fill="currentColor" />
             </div>
           )}
@@ -904,6 +873,28 @@ const UserProfile = ({ business, onClick }: { business: BusinessProfile, onClick
     </div>
   </div>
 );
+
+// --- ANIMATED COUNTER ---
+const AnimatedCounter = ({ value, currency }: { value: number; currency: string }) => {
+  const nodeRef = React.useRef<HTMLSpanElement>(null);
+
+  React.useEffect(() => {
+    const node = nodeRef.current;
+    if (!node) return;
+
+    const controls = animate(0, value, {
+      duration: 1.5,
+      ease: [0.16, 1, 0.3, 1], // easeOutQuart
+      onUpdate(v) {
+        node.textContent = formatCurrency(Math.floor(v), currency);
+      },
+    });
+
+    return () => controls.stop();
+  }, [value, currency]);
+
+  return <span ref={nodeRef}>{formatCurrency(value, currency)}</span>;
+};
 
 // --- PAGES ---
 
@@ -919,7 +910,8 @@ const Dashboard = ({
   currency,
   onEditProduct,
   onViewProducts,
-  onViewReviews
+  onViewReviews,
+  onViewLeads
 }: { 
   business: BusinessProfile, 
   leads: Lead[], 
@@ -932,7 +924,8 @@ const Dashboard = ({
   currency: string,
   onEditProduct?: (p: Product) => void,
   onViewProducts?: () => void,
-  onViewReviews?: () => void
+  onViewReviews?: () => void,
+  onViewLeads?: () => void
 }) => {
   const unreadReviews = (reviews || []).filter(r => !r.isRead);
   const totalRevenue = orders.reduce((sum, o) => sum + (o.paymentStatus === 'paid' ? o.amount : 0), 0);
@@ -948,6 +941,45 @@ const Dashboard = ({
   const paidLeads = leads.filter(l => l.status === 'paid');
   const interestedLeads = leads.filter(l => l.status === 'interested');
   const newLeads = leads.filter(l => l.status === 'new');
+
+  const getThisMonthSales = () => {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+
+    const paidOrdersSum = orders.filter(o => {
+      if (o.paymentStatus !== 'paid' || !o.createdAt) return false;
+      try {
+        const d = new Date(o.createdAt);
+        return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
+      } catch (e) {
+        return false;
+      }
+    }).reduce((sum, o) => sum + (Number(o.amount) || 0), 0);
+
+    const paidLeadsSum = leads.filter(l => {
+      if (l.status !== 'paid' || !l.createdAt) return false;
+      try {
+        const d = new Date(l.createdAt);
+        return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
+      } catch (e) {
+        return false;
+      }
+    }).reduce((sum, lead) => {
+      const matchedProduct = products.find(p => 
+        p.name.toLowerCase() === lead.interest.toLowerCase() || 
+        lead.interest.toLowerCase().includes(p.name.toLowerCase()) ||
+        p.name.toLowerCase().includes(lead.interest.toLowerCase())
+      );
+      const saleAmount = matchedProduct ? matchedProduct.price : 100;
+      return sum + saleAmount;
+    }, 0);
+
+    return paidOrdersSum + paidLeadsSum;
+  };
+
+  const thisMonthSales = getThisMonthSales();
+  const formattedThisMonthSales = formatCurrency(thisMonthSales, currency || 'NGN');
 
   const getDailyStats = () => {
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -1044,6 +1076,34 @@ const Dashboard = ({
           >
             <Plus size={16} /> Quick Lead
           </button>
+        </div>
+      </div>
+
+      {/* New Total Sales Card */}
+      <div id="total_sales_card_container" className="w-full bg-[#5B2FD4] rounded-xl p-5 sm:p-6 text-white shadow-sm relative overflow-hidden flex flex-col justify-between">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full translate-x-8 -translate-y-8 pointer-events-none" />
+        <div className="absolute bottom-0 right-1/4 w-24 h-24 bg-white/5 rounded-full translate-y-12 pointer-events-none" />
+
+        <div className="flex justify-between items-start z-10">
+          <div>
+            <p className="text-white/80 text-xs font-semibold uppercase tracking-widest mb-1.5">Total Sales</p>
+            <div className="flex items-baseline gap-2.5 flex-wrap">
+              <span className="text-3xl sm:text-4xl font-extrabold tracking-tight">
+                <AnimatedCounter value={thisMonthSales} currency={currency || 'NGN'} />
+              </span>
+              <span className="inline-flex items-center gap-1 bg-emerald-500/25 text-emerald-300 text-xs font-bold px-2.5 py-0.5 rounded-full select-none">
+                +18%
+              </span>
+            </div>
+          </div>
+          <div className="bg-white/10 p-2.5 rounded-xl border border-white/10 shadow-sm shrink-0">
+            <TrendingUp size={20} className="text-white" />
+          </div>
+        </div>
+
+        <div className="mt-4 pt-3.5 border-t border-white/10 flex justify-between items-center text-xs text-white/85 z-10">
+          <span className="font-semibold tracking-tight">This Month</span>
+          <span className="text-white/60 text-[10px] font-mono">System-calculated KPI</span>
         </div>
       </div>
 
@@ -1313,22 +1373,49 @@ const Dashboard = ({
         <Card className="p-6">
           <div className="flex justify-between items-center mb-6">
             <h3 className="font-bold text-slate-900 text-sm italic serif">Recent Leads</h3>
+            {onViewLeads && (
+              <button 
+                onClick={onViewLeads}
+                className="text-xs font-bold text-sky-600 hover:text-sky-700 hover:underline transition-all flex items-center gap-1 cursor-pointer"
+              >
+                <span>View all</span>
+                <ChevronRight size={14} />
+              </button>
+            )}
           </div>
           <div className="space-y-4">
-            {leads.slice(0, 5).map((lead) => (
-              <div key={lead.id} className="flex items-center gap-3 pb-3 border-bottom border-slate-50 last:border-0 last:pb-0">
-                <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-xs uppercase">
-                  {lead.name[0]}
+            {leads.slice(0, 5).map((lead) => {
+              const matchedProduct = products.find(p => 
+                p.name.toLowerCase() === lead.interest.toLowerCase() || 
+                lead.interest.toLowerCase().includes(p.name.toLowerCase()) ||
+                p.name.toLowerCase().includes(lead.interest.toLowerCase())
+              );
+              const price = matchedProduct ? matchedProduct.price : 100;
+              const formattedPrice = formatCurrency(price, currency || 'NGN');
+
+              const leadOrders = orders.filter(o => o.leadId === lead.id);
+              const paidOrdersCount = leadOrders.filter(o => o.paymentStatus === 'paid' || o.fulfillmentStatus === 'completed' || o.fulfillmentStatus === 'delivered').length;
+              const itemsCount = paidOrdersCount > 0 ? paidOrdersCount : (lead.status === 'paid' ? 1 : 0);
+
+              return (
+                <div key={lead.id} className="flex items-center gap-3 pb-3 border-bottom border-slate-50 last:border-0 last:pb-0">
+                  <div className="w-10 h-10 rounded-full bg-[#5B2FD4] border border-[#5B2FD4]/20 flex items-center justify-center text-white font-bold text-xs uppercase shrink-0 shadow-sm shadow-[#5B2FD4]/10">
+                    {lead.name[0]}
+                  </div>
+                  <div className="flex-1 min-w-0 pr-5 sm:pr-8">
+                    <p className="text-sm font-bold text-slate-900 truncate">{lead.name}</p>
+                    <p className="text-[11px] font-semibold text-emerald-600 mb-0.5">{itemsCount} {itemsCount === 1 ? 'item' : 'items'} purchased</p>
+                    <p className="text-xs text-slate-500 truncate">{lead.interest}</p>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className="text-sm font-extrabold text-slate-900 font-sans tracking-tight">{formattedPrice}</span>
+                    <Badge variant={lead.status === 'paid' ? 'success' : lead.status === 'interested' ? 'info' : 'default'}>
+                      {lead.status}
+                    </Badge>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-slate-900 truncate">{lead.name}</p>
-                  <p className="text-xs text-slate-500 truncate">{lead.interest}</p>
-                </div>
-                <Badge variant={lead.status === 'paid' ? 'success' : lead.status === 'interested' ? 'info' : 'default'}>
-                  {lead.status}
-                </Badge>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </Card>
       </div>
@@ -1460,12 +1547,25 @@ const ProductsPage = ({ products, onAddProduct, onEditProduct, onDeleteProduct, 
                       </span>
                     )}
                   </span>
-                  <button 
-                    onClick={() => onEditProduct(product)}
-                    className="text-[10px] font-black uppercase text-sky-600 tracking-widest hover:underline"
-                  >
-                    Edit Product
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button 
+                      onClick={() => onEditProduct(product)}
+                      className="text-[10px] font-black uppercase text-sky-600 tracking-widest hover:underline transition-colors"
+                    >
+                      Edit
+                    </button>
+                    {onDeleteProduct && (
+                      <>
+                        <span className="text-slate-300 text-xs font-light select-none font-sans">•</span>
+                        <button 
+                          onClick={() => onDeleteProduct(product.id)}
+                          className="text-[10px] font-black uppercase text-rose-600 tracking-widest hover:underline transition-colors flex items-center gap-1"
+                        >
+                          <Trash2 size={10} className="stroke-[2.5]" /> Delete
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
             </Card>
@@ -1522,7 +1622,7 @@ const LeadsPage = ({ leads, onAddLead, onUpdateStatus, onWhatsApp, onOpenImport,
               <tr key={lead.id} className="hover:bg-slate-50/50 transition-colors group">
                 <td className="p-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold text-xs uppercase">
+                    <div className="w-10 h-10 rounded-full bg-[#5B2FD4] border border-[#5B2FD4]/20 flex items-center justify-center text-white font-bold text-xs uppercase shrink-0 shadow-sm shadow-[#5B2FD4]/10">
                       {lead.name[0]}
                     </div>
                     <div>
@@ -1596,7 +1696,7 @@ const FollowUpsPage = ({ leads, onWhatsApp, onRegenerate }: { leads: Lead[], onW
             <div>
               <div className="flex justify-between items-start mb-4">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-xs">
+                  <div className="w-8 h-8 rounded-full bg-[#5B2FD4] border border-[#5B2FD4]/20 flex items-center justify-center text-white font-bold text-xs uppercase shrink-0 shadow-sm shadow-[#5B2FD4]/10">
                     {lead.name[0]}
                   </div>
                   <div>
@@ -1770,17 +1870,20 @@ const SettingsPage = ({ business, setBusiness, onLogout, showToast }: { business
   const [isDraggingLogo, setIsDraggingLogo] = useState(false);
   const logoInputRef = React.useRef<HTMLInputElement>(null);
 
-  const handleLogoUpload = (file: File) => {
-    if (file.size > 2 * 1024 * 1024) {
-      showToast?.("Image size must be less than 2MB.", "error");
-      return;
-    }
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setLocalBusiness(prev => ({ ...prev, logo: reader.result as string }));
+  const handleLogoUpload = async (file: File) => {
+    try {
+      const compressed = await compressImage(file, 300, 0.7);
+      setLocalBusiness(prev => ({ ...prev, logo: compressed }));
       showToast?.("Profile image uploaded successfully! Press 'Save Changes' to apply.", "success");
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      console.error("Error compressing logo:", err);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setLocalBusiness(prev => ({ ...prev, logo: reader.result as string }));
+        showToast?.("Profile image uploaded successfully! Press 'Save Changes' to apply.", "success");
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const handleLogoDrop = (e: React.DragEvent) => {
@@ -3651,7 +3754,7 @@ const StorefrontPreview = ({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-slate-950/60 backdrop-blur-xs transition-opacity" 
+              className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm transition-opacity" 
               onClick={() => setIsCartOpen(false)} 
             />
 
@@ -3750,7 +3853,7 @@ const StorefrontPreview = ({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-slate-950/60 backdrop-blur-xs" 
+              className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" 
               onClick={() => { setIsInquiryOpen(false); setSelectedProduct(null); }} 
             />
 
@@ -3980,8 +4083,21 @@ const StorefrontPreview = ({
   );
 };
 
-const AuthScreen = ({ showToast }: { showToast?: (m: string, t?: 'success' | 'error' | 'info') => void }) => {
-  const [activeTab, setActiveTab] = useState<'signin' | 'signup'>('signin');
+const AuthScreen = ({ 
+  showToast,
+  initialTab = 'signin',
+  onBackToLanding
+}: { 
+  showToast?: (m: string, t?: 'success' | 'error' | 'info') => void;
+  initialTab?: 'signin' | 'signup';
+  onBackToLanding?: () => void;
+}) => {
+  const [activeTab, setActiveTab] = useState<'signin' | 'signup'>(initialTab);
+  
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -4133,6 +4249,16 @@ const AuthScreen = ({ showToast }: { showToast?: (m: string, t?: 'success' | 'er
 
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 relative overflow-hidden">
+      {onBackToLanding && (
+        <button 
+          onClick={onBackToLanding}
+          className="absolute top-6 left-6 z-25 text-slate-400 hover:text-white font-bold text-xs flex items-center gap-2 cursor-pointer bg-slate-900/60 hover:bg-slate-900 border border-white/10 px-4 py-2.5 rounded-xl transition-all"
+        >
+          <ArrowLeft size={14} />
+          <span>Back to Home</span>
+        </button>
+      )}
+
       {/* Background decorations */}
       <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-sky-500 rounded-full blur-[120px]" />
@@ -4487,6 +4613,8 @@ export default function App() {
   const [publicError, setPublicError] = useState<string | null>(null);
 
   const [activePage, setActivePage] = useState('dashboard');
+  const [showAuth, setShowAuth] = useState(false);
+  const [authTab, setAuthTab] = useState<'signin' | 'signup'>('signin');
   const [business, setBusiness] = useState<BusinessProfile>(INITIAL_BUSINESS);
   const [products, setProducts] = useState<Product[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -5002,14 +5130,22 @@ export default function App() {
 
   const executeDelete = async () => {
     if (!deleteConf.id || !deleteConf.type || !user) return;
+    const itemType = deleteConf.type;
+    const itemId = deleteConf.id;
     try {
-      if (deleteConf.type === 'product') {
-        await deleteDoc(doc(db, 'products', deleteConf.id));
-      } else if (deleteConf.type === 'lead') {
-        await deleteDoc(doc(db, 'leads', deleteConf.id));
+      if (itemType === 'product') {
+        const prod = products.find(p => p.id === itemId);
+        const name = prod?.name || 'Product';
+        await deleteDoc(doc(db, 'products', itemId));
+        showToast(`"${name}" has been deleted successfully.`, "success");
+      } else if (itemType === 'lead') {
+        const leadItem = leads.find(l => l.id === itemId);
+        const name = leadItem?.name || 'Lead';
+        await deleteDoc(doc(db, 'leads', itemId));
+        showToast(`Lead "${name}" has been deleted successfully.`, "success");
       }
     } catch (e) {
-      handleFirestoreError(e, OperationType.DELETE, deleteConf.type === 'product' ? 'products' : 'leads');
+      handleFirestoreError(e, OperationType.DELETE, itemType === 'product' ? 'products' : 'leads');
     } finally {
       setDeleteConf({ isOpen: false, type: null, id: null });
     }
@@ -5193,9 +5329,31 @@ export default function App() {
   }
 
   if (!user) {
+    if (showAuth) {
+      return (
+        <>
+          <AuthScreen 
+            showToast={showToast} 
+            initialTab={authTab}
+            onBackToLanding={() => setShowAuth(false)}
+          />
+          <ToastContainer toasts={toasts} onClose={(id) => setToasts(prev => prev.filter(t => t.id !== id))} />
+        </>
+      );
+    }
+
     return (
       <>
-        <AuthScreen showToast={showToast} />
+        <LandingPage 
+          onGetStarted={() => {
+            setAuthTab('signup');
+            setShowAuth(true);
+          }}
+          onLogin={() => {
+            setAuthTab('signin');
+            setShowAuth(true);
+          }}
+        />
         <ToastContainer toasts={toasts} onClose={(id) => setToasts(prev => prev.filter(t => t.id !== id))} />
       </>
     );
@@ -5228,6 +5386,7 @@ export default function App() {
           currency={business.currency} 
           onViewProducts={() => setActivePage('products')}
           onViewReviews={() => setActivePage('reviews')}
+          onViewLeads={() => setActivePage('leads')}
           onEditProduct={(p) => {
             setEditingProduct(p);
             setIsProductModalOpen(true);
@@ -5274,7 +5433,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans selection:bg-sky-100 selection:text-sky-900">
+    <div className="min-h-screen bg-[#EDE8FB] font-sans selection:bg-[#5B2FD4]/10 selection:text-[#5B2FD4]">
       <Sidebar activePage={activePage} setActivePage={setActivePage} lowStockCount={lowStockCount} unseenReviewsCount={unseenReviewsCount} />
       <MobileNav activePage={activePage} setActivePage={setActivePage} lowStockCount={lowStockCount} unseenReviewsCount={unseenReviewsCount} />
       
