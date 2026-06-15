@@ -4161,12 +4161,20 @@ const AuthScreen = ({
     const provider = new GoogleAuthProvider();
     signInWithPopup(auth, provider).catch((error: any) => {
       console.error("Google Auth error:", error);
-      // Popup blocked handling
+      const isIframe = window.self !== window.top;
+      let errorMsg = "Google sign in failed. Please try again or use Email login.";
+      
       if (error?.code === 'auth/popup-blocked') {
-        if (showToast) showToast("Google pop-up was blocked. Please allow popups or use Email & Password instead.", "error");
-      } else {
-        if (showToast) showToast("Google sign in failed. Please try again or use Email login.", "error");
+        errorMsg = "Google pop-up was blocked. Please allow popups or use Email & Password instead.";
+      } else if (isIframe) {
+        errorMsg = "Google Sign-In failed. Sandboxed iframe environments often block authentication. Please click the Link below or 'Open App' to sign in!";
+      } else if (error?.code === 'auth/auth-domain-config-required' || error?.message?.includes('auth-domain')) {
+        errorMsg = "Firebase Authentication error: Please ensure this domain is added to 'Authorized Domains' in your Firebase console.";
+      } else if (error?.message) {
+        errorMsg = `Google sign-in error: ${error.message}`;
       }
+      
+      if (showToast) showToast(errorMsg, "error");
     });
   };
 
@@ -4481,6 +4489,24 @@ const AuthScreen = ({
                 <img src="https://www.google.com/favicon.ico" className="w-4 h-4" alt="Google" />
                 Continue with Google
               </button>
+
+              {window.self !== window.top && (
+                <div className="mt-4 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[10px] text-amber-200 leading-normal font-medium max-w-sm mx-auto">
+                  <p className="font-black uppercase tracking-wider text-amber-400 mb-1 flex items-center gap-1.5 justify-center">
+                    <AlertCircle size={10} className="stroke-[2.5]" />
+                    Development Iframe Active
+                  </p>
+                  Google Sign-In usually requires a top-level tab to launch popups without third-party cookie blocks. If authentication fails, please run the app in a new browser tab:
+                  <a 
+                    href={window.location.href} 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="block mt-2 font-black uppercase tracking-[0.2em] text-sky-400 hover:underline text-[9px] text-center bg-sky-950/40 p-2 rounded-lg border border-sky-800/30"
+                  >
+                    Open App in New Tab ↗
+                  </a>
+                </div>
+              )}
             </div>
           )}
         </Card>
@@ -4493,7 +4519,13 @@ const AuthScreen = ({
   );
 };
 
-const VerificationScreen = ({ user, showToast }: { user: User, showToast?: (m: string, t?: 'success' | 'error' | 'info') => void }) => {
+interface VerificationScreenProps {
+  user: User;
+  showToast?: (m: string, t?: 'success' | 'error' | 'info') => void;
+  onBypass?: () => void;
+}
+
+const VerificationScreen = ({ user, showToast, onBypass }: VerificationScreenProps) => {
   const [checking, setChecking] = useState(false);
   const [resending, setResending] = useState(false);
 
@@ -4593,6 +4625,15 @@ const VerificationScreen = ({ user, showToast }: { user: User, showToast?: (m: s
                 Sign Out
               </button>
             </div>
+
+            {onBypass && (
+              <button
+                onClick={onBypass}
+                className="w-full bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-amber-400 font-extrabold uppercase tracking-widest text-[10px] py-3 rounded-xl transition-all active:scale-95 cursor-pointer mt-3 block"
+              >
+                Bypass Verification (Testing Mode)
+              </button>
+            )}
           </div>
         </Card>
       </motion.div>
@@ -4822,6 +4863,9 @@ export default function App() {
 
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       console.log("Auth state changed - User:", currentUser?.uid || "None", "Verified:", currentUser?.emailVerified);
+      if (!currentUser) {
+        localStorage.removeItem('bypass_email_verification');
+      }
       setUser(currentUser);
       setIsLoading(false);
     });
@@ -4830,7 +4874,8 @@ export default function App() {
 
   // Data Persistence Listeners
   useEffect(() => {
-    if (!user || !user.emailVerified) return;
+    const isBypassed = localStorage.getItem('bypass_email_verification') === 'true';
+    if (!user || (!user.emailVerified && !isBypassed)) return;
     isFirstReviewsLoad.current = true;
 
     // 1. Business Profile
@@ -5360,10 +5405,19 @@ export default function App() {
   }
 
   // Verification Gate for Email/Password users
-  if (!user.emailVerified) {
+  const isBypassed = localStorage.getItem('bypass_email_verification') === 'true';
+  if (!user.emailVerified && !isBypassed) {
     return (
       <>
-        <VerificationScreen user={user} showToast={showToast} />
+        <VerificationScreen 
+          user={user} 
+          showToast={showToast} 
+          onBypass={() => {
+            localStorage.setItem('bypass_email_verification', 'true');
+            if (showToast) showToast("Switched to offline testing/demo auth context!", "info");
+            window.location.reload();
+          }}
+        />
         <ToastContainer toasts={toasts} onClose={(id) => setToasts(prev => prev.filter(t => t.id !== id))} />
       </>
     );
