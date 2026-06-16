@@ -14,7 +14,7 @@
 
 @layer base {
   body {
-    @apply bg-lavender-bg text-dark-text;
+    @apply bg-white text-dark-text;
   }
 }
 

@@ -5487,7 +5487,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#EDE8FB] font-sans selection:bg-[#5B2FD4]/10 selection:text-[#5B2FD4]">
+    <div className="min-h-screen bg-gradient-to-b from-[#FFFFFF] to-[#F5F3FF] font-sans selection:bg-[#5B2FD4]/10 selection:text-[#5B2FD4]">
       <Sidebar activePage={activePage} setActivePage={setActivePage} lowStockCount={lowStockCount} unseenReviewsCount={unseenReviewsCount} />
       <MobileNav activePage={activePage} setActivePage={setActivePage} lowStockCount={lowStockCount} unseenReviewsCount={unseenReviewsCount} />
       
