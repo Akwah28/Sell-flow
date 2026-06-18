@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   TrendingUp, 
   Store, 
@@ -38,7 +38,8 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { db, OperationType, handleFirestoreError } from '../firebase';
-import { collection, addDoc, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, addDoc, query, orderBy, onSnapshot, where } from 'firebase/firestore';
+import { cn, formatCurrency } from '../lib/utils';
 
 interface LandingPageProps {
   onGetStarted: () => void;
@@ -58,6 +59,90 @@ export default function LandingPage({ onGetStarted, onLogin }: LandingPageProps)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeFaq, setActiveFaq] = useState<number | null>(null);
   const [currentPage, setCurrentPage] = useState<'home' | 'about' | 'features' | 'pricing' | 'contact'>('home');
+
+  // Discover Products database state
+  const [discoverProducts, setDiscoverProducts] = useState<any[]>([]);
+  const [businessesMap, setBusinessesMap] = useState<{[key: string]: any}>({});
+  const [isDiscoverLoading, setIsDiscoverLoading] = useState(true);
+  const [activeStoresCount, setActiveStoresCount] = useState(0);
+
+  const navigateTo = (path: string) => {
+    const cleanPath = path.startsWith('/') ? path : `/${path}`;
+    window.history.pushState(null, '', cleanPath);
+    setTimeout(() => {
+      window.dispatchEvent(new Event('pushstate_changed'));
+    }, 0);
+  };
+
+  // Real-time listener for Discover Products & Active Businesses (Flat and Optimized)
+  useEffect(() => {
+    setIsDiscoverLoading(true);
+
+    // 1. Subscribe to business profiles
+    const businessesRef = collection(db, 'businesses');
+    const unsubscribeBusinesses = onSnapshot(businessesRef, (bizSnapshot) => {
+      const bizMap: {[key: string]: any} = {};
+      let activeCount = 0;
+      bizSnapshot.forEach((doc) => {
+        const data = doc.data();
+        if (data) {
+          const ownerId = data.ownerId || doc.id;
+          bizMap[ownerId] = { id: doc.id, ...data };
+          if (data.storeSlug) {
+            activeCount++;
+          }
+        }
+      });
+      setBusinessesMap(bizMap);
+      setActiveStoresCount(activeCount);
+    }, (err) => {
+      console.error("Error loading businesses for discover section:", err);
+    });
+
+    // 2. Subscribe to active products with matching query permissions
+    const productsQuery = query(collection(db, 'products'), where('isActive', '==', true));
+    const unsubscribeProducts = onSnapshot(productsQuery, (prodSnapshot) => {
+      const allActiveProducts: any[] = [];
+      prodSnapshot.forEach((doc) => {
+        const data = doc.data();
+        if (data) {
+          allActiveProducts.push({ id: doc.id, ...data });
+        }
+      });
+      setDiscoverProducts(allActiveProducts);
+      setIsDiscoverLoading(false);
+    }, (err) => {
+      console.error("Error loading products for discover section:", err);
+      setIsDiscoverLoading(false);
+    });
+
+    return () => {
+      unsubscribeBusinesses();
+      unsubscribeProducts();
+    };
+  }, []);
+
+  // Filter, sort, and slice dynamically in render
+  const validDiscoverProducts = useMemo(() => {
+    const filtered = discoverProducts.filter(p => {
+      const store = businessesMap[p.ownerId];
+      return store && store.storeSlug;
+    });
+
+    // Sort by createdAt descending
+    filtered.sort((a, b) => {
+      const dateA = a.createdAt ? (typeof a.createdAt === 'object' && a.createdAt.seconds ? a.createdAt.seconds * 1000 : new Date(a.createdAt).getTime()) : 0;
+      const dateB = b.createdAt ? (typeof b.createdAt === 'object' && b.createdAt.seconds ? b.createdAt.seconds * 1000 : new Date(b.createdAt).getTime()) : 0;
+      return dateB - dateA;
+    });
+
+    return filtered;
+  }, [discoverProducts, businessesMap]);
+
+  const stats = useMemo(() => ({
+    productsCount: validDiscoverProducts.length,
+    storesCount: activeStoresCount
+  }), [validDiscoverProducts.length, activeStoresCount]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' as any });
@@ -1077,6 +1162,16 @@ export default function LandingPage({ onGetStarted, onLogin }: LandingPageProps)
                 <motion.div layoutId="navIndicator" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#5B2FD4] rounded-full" />
               )}
             </button>
+            <button 
+              onClick={() => {
+                window.history.pushState(null, '', '/explore');
+                window.dispatchEvent(new Event('pushstate_changed'));
+              }} 
+              className="text-[#5B2FD4] font-black bg-[#EDE8FB] hover:bg-[#5B2FD4] hover:text-white transition-all px-4 py-1.5 rounded-full text-xs shadow-sm hover:scale-105 active:scale-95 cursor-pointer flex items-center gap-1.5"
+            >
+              <TrendingUp size={12} strokeWidth={2.5} />
+              Explore Products
+            </button>
           </div>
 
           <div className="hidden md:flex items-center gap-3">
@@ -1159,6 +1254,18 @@ export default function LandingPage({ onGetStarted, onLogin }: LandingPageProps)
               >
                 <span>Contact</span>
                 {currentPage === 'contact' && <span className="w-1.5 h-1.5 rounded-full bg-[#5B2FD4]" />}
+              </button>
+
+              <button 
+                onClick={() => { 
+                  setMobileMenuOpen(false); 
+                  window.history.pushState(null, '', '/explore');
+                  window.dispatchEvent(new Event('pushstate_changed'));
+                }} 
+                className="w-full text-center py-3.5 bg-[#EDE8FB] hover:bg-[#5B2FD4] hover:text-white text-[#5B2FD4] font-extrabold rounded-xl transition-all cursor-pointer shadow-sm flex items-center justify-center gap-1.5"
+              >
+                <TrendingUp size={14} strokeWidth={2.5} />
+                <span>Explore Products Catalog</span>
               </button>
               
               <div className="border-t border-[#EDE8FB] pt-3 flex flex-col gap-2">
@@ -2092,6 +2199,179 @@ export default function LandingPage({ onGetStarted, onLogin }: LandingPageProps)
             </motion.div>
           </motion.div>
         </motion.div>
+      </section>
+
+      {/* DISCOVER PRODUCTS SECTION */}
+      <section className="py-20 bg-[#FBFBFE] border-t border-b border-slate-100 overflow-hidden">
+        <div className="max-w-6xl mx-auto px-4 space-y-12">
+          
+          <div className="text-center space-y-4 max-w-2xl mx-auto">
+            <span className="text-[10px] font-black tracking-widest text-[#5B2FD4] uppercase bg-violet-105 border border-[#5B2FD4]/10 px-3 py-1 rounded-md">
+              Live Ecosystem
+            </span>
+            <h2 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight leading-none uppercase italic">
+              🛍 Discover Products
+            </h2>
+            <p className="text-slate-550 text-xs sm:text-sm font-medium">
+              Browse products from businesses using MySellFlow.
+            </p>
+
+            {/* Statistics Row */}
+            <div className="flex flex-wrap justify-center items-center gap-4 sm:gap-6 pt-2">
+              <div className="bg-white border border-slate-150 px-5 py-3 rounded-2xl shadow-xs flex items-center gap-2.5">
+                <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="text-xs font-black text-slate-800">
+                  {isDiscoverLoading ? '...' : stats.productsCount} Products Available
+                </span>
+              </div>
+              <div className="bg-white border border-slate-150 px-5 py-3 rounded-2xl shadow-xs flex items-center gap-2.5">
+                <div className="h-2 w-2 rounded-full bg-[#5B2FD4] animate-pulse" />
+                <span className="text-xs font-black text-slate-800">
+                  {isDiscoverLoading ? '...' : stats.storesCount} Active Stores
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Live Product Preview */}
+          <div className="w-full">
+            {isDiscoverLoading ? (
+              /* Loading Skeletons */
+              <div className="flex overflow-x-auto md:grid md:grid-cols-4 gap-6 pb-6 md:pb-0 px-4 md:px-0">
+                {[1, 2, 3, 4].map((id) => (
+                  <div key={id} className="w-[280px] shrink-0 md:w-auto bg-white rounded-3xl border border-slate-100 p-4 space-y-4 animate-pulse">
+                    <div className="aspect-square bg-slate-50 rounded-2xl w-full" />
+                    <div className="space-y-2">
+                      <div className="h-3 bg-slate-100 rounded w-1/3" />
+                      <div className="h-4 bg-slate-100 rounded w-3/4" />
+                      <div className="h-3.5 bg-slate-100 rounded w-1/2" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : validDiscoverProducts.length === 0 ? (
+              /* Empty State */
+              <div className="text-center py-12 bg-white rounded-3xl border border-dashed border-slate-200 p-8 max-w-sm mx-auto space-y-4 shadow-xs">
+                <div className="text-4xl">🛍️</div>
+                <h4 className="text-sm font-black uppercase text-slate-800 tracking-tight">No products listed yet</h4>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Be the first entrepreneur to launch an active storefront and list your custom products!
+                </p>
+                <button 
+                  type="button"
+                  onClick={onGetStarted}
+                  className="bg-[#5B2FD4] text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-sm hover:bg-[#4a23b3] transition-all cursor-pointer"
+                >
+                  Create A Store Now
+                </button>
+              </div>
+            ) : (
+              /* Products Grid/Scroll Container */
+              <div className="flex overflow-x-auto md:grid md:grid-cols-4 gap-6 pb-6 md:pb-0 px-4 md:px-0 scrollbar-none snap-x snap-mandatory scroll-smooth overscroll-x-contain">
+                {validDiscoverProducts.slice(0, 8).map((product) => {
+                  const seller = businessesMap[product.ownerId];
+                  const discount = product.originalPrice && product.originalPrice > product.price 
+                    ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100) 
+                    : null;
+
+                  return (
+                    <div 
+                      key={product.id} 
+                      onClick={() => navigateTo(`/explore/product/${product.id}`)}
+                      className="w-[280px] shrink-0 md:w-auto snap-align-start bg-white rounded-2xl border border-slate-150 shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 flex flex-col group cursor-pointer overflow-hidden relative"
+                    >
+                      {/* Image Frame */}
+                      <div className="aspect-square bg-slate-50/60 overflow-hidden flex items-center justify-center relative p-4 border-b border-slate-50 select-none">
+                        {product.images?.[0] ? (
+                          <img 
+                            src={product.images[0]} 
+                            className="max-h-full max-w-full object-contain group-hover:scale-105 transition-transform duration-300" 
+                            alt={product.name} 
+                            referrerPolicy="no-referrer"
+                          />
+                        ) : (
+                          <ShoppingBag size={32} strokeWidth={1} className="text-slate-350" />
+                        )}
+
+                        {/* Top-right discount label if any */}
+                        {discount && (
+                          <div className="absolute top-2.5 right-2.5 bg-red-500 text-white px-1.5 py-0.5 rounded-md text-[8px] font-black uppercase tracking-wider shadow-sm z-10">
+                            {discount}% OFF
+                          </div>
+                        )}
+
+                        {/* Type badge overlay */}
+                        {product.type && (
+                          <div className="absolute top-2.5 left-2.5 bg-white/90 backdrop-blur-md px-1.5 py-0.5 rounded-md border border-slate-100 text-[8px] font-black uppercase tracking-widest text-[#5B2FD4]">
+                            {product.type}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Info Frame */}
+                      <div className="p-4 flex-1 flex flex-col justify-between space-y-4">
+                        <div className="space-y-1.5">
+                          {/* Store Name Badge */}
+                          {seller && (
+                            <div className="flex items-center gap-1">
+                              <span className="text-[7.5px] font-black tracking-widest uppercase truncate max-w-[150px] bg-indigo-50 text-[#5B2FD4] px-1.5 py-0.5 rounded-md border border-indigo-100/50">
+                                {seller.name}
+                              </span>
+                              <CheckCircle2 size={8.5} className="text-[#5B2FD4] fill-[#5B2FD4]/10 shrink-0" />
+                            </div>
+                          )}
+
+                          <h3 className="text-xs sm:text-xs md:text-sm font-bold text-slate-800 line-clamp-2 leading-snug group-hover:text-[#5B2FD4] transition-colors min-h-[32px]">
+                            {product.name}
+                          </h3>
+                        </div>
+
+                        <div className="space-y-2.5">
+                          {/* Prices Row */}
+                          <div className="flex items-baseline gap-1.5">
+                            <span className="text-xs sm:text-sm md:text-base font-black text-slate-950">
+                              {formatCurrency(product.price, seller?.currency)}
+                            </span>
+                            {product.originalPrice && product.originalPrice > product.price && (
+                              <span className="text-[9px] sm:text-[10px] text-slate-400 font-bold line-through">
+                                {formatCurrency(product.originalPrice, seller?.currency)}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Accent detail bar */}
+                          <p className="text-[7.5px] font-black uppercase tracking-wider text-emerald-600 flex items-center gap-1 bg-emerald-50/60 p-1.5 rounded-lg border border-emerald-100/50">
+                            <span>Ready to Purchase</span> • <span className="underline font-black">{seller?.name || "Merchant"}</span> ✓
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Call-to-actions row */}
+          <div className="flex flex-col items-center justify-center gap-4.5 pt-4">
+            <button
+              type="button"
+              onClick={() => navigateTo('/explore')}
+              className="bg-[#5B2FD4] hover:bg-[#4a23b3] text-white font-black uppercase text-[10px] tracking-widest px-7 py-3.5 rounded-2xl transition-all shadow-[0_4px_14px_rgba(91,47,212,0.25)] hover:shadow-[0_6px_20px_rgba(91,47,212,0.35)] active:scale-98 cursor-pointer"
+            >
+              Explore Products
+            </button>
+            <button
+              type="button"
+              onClick={() => navigateTo('/explore')}
+              className="group text-slate-500 hover:text-[#5B2FD4] font-black text-[10px] uppercase tracking-widest transition-colors flex items-center gap-1.5 cursor-pointer"
+            >
+              <span>View All Products</span>
+              <span className="group-hover:translate-x-1 transition-transform">→</span>
+            </button>
+          </div>
+
+        </div>
       </section>
 
       {/* EARLY SOCIAL PROOF SEGMENTS */}
@@ -3199,6 +3479,20 @@ export default function LandingPage({ onGetStarted, onLogin }: LandingPageProps)
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Floating Discover Button (Mobile Only) */}
+      {currentPage === 'home' && (
+        <div className="md:hidden fixed bottom-6 right-6 z-50">
+          <button 
+            type="button"
+            onClick={() => navigateTo('/explore')}
+            className="flex items-center gap-1.5 bg-[#5B2FD4] text-white font-black uppercase text-[9px] tracking-widest px-4 py-3 rounded-full shadow-[0_6px_16px_rgba(91,47,212,0.35)] active:scale-95 hover:bg-[#4a23b3] transition-all cursor-pointer border border-[#5B2FD4]"
+            id="mobile-explore-btn"
+          >
+            <span>🔍 Explore Products</span>
+          </button>
+        </div>
+      )}
 
     </div>
   );

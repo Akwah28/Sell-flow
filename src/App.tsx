@@ -43,6 +43,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence, animate } from 'framer-motion';
 import LandingPage from './components/LandingPage';
+import ExplorePage from './components/ExplorePage';
 import { 
   BarChart, 
   Bar, 
@@ -2364,7 +2365,7 @@ const SettingsPage = ({ business, setBusiness, onLogout, showToast }: { business
 const isStorefrontSlug = (path: string): boolean => {
   if (!path) return false;
   if (path.includes('.')) return false;
-  const reserved = ['assets', 'api', 'dashboard', 'products', 'leads', 'followups', 'orders', 'reviews', 'settings', 'index.html'];
+  const reserved = ['assets', 'api', 'dashboard', 'products', 'leads', 'followups', 'orders', 'reviews', 'settings', 'index.html', 'explore', 'store'];
   if (reserved.includes(path.toLowerCase())) return false;
   return /^[a-zA-Z0-9_\-]+$/.test(path);
 };
@@ -2378,6 +2379,16 @@ const resolveStorefrontSlug = (): string | null => {
     const cleanTest = testStore.toLowerCase().trim();
     if (isStorefrontSlug(cleanTest)) {
       return cleanTest;
+    }
+  }
+
+  const pathname = window.location.pathname.replace(/^\/+|\/+$/g, '').toLowerCase().trim();
+
+  // Support /store/[storeSlug] path
+  if (pathname.startsWith('store/')) {
+    const slugPart = pathname.substring(6).split('/')[0].trim();
+    if (isStorefrontSlug(slugPart)) {
+      return slugPart;
     }
   }
 
@@ -2413,9 +2424,12 @@ const resolveStorefrontSlug = (): string | null => {
   }
 
   // 4. Fallback to path-based storefront slug (e.g. `sellflow-*.run.app/Akwah` or `mysellflow.store/joysfashion`)
-  const pathname = window.location.pathname.replace(/^\/+|\/+$/g, '').toLowerCase().trim();
   const firstPathSegment = pathname.split('/')[0];
-  if (isStorefrontSlug(firstPathSegment)) {
+  const reservedPaths = [
+    'www', 'admin', 'api', 'app', 'sales', 'dashboard', 'support', 'mail', 'blog', 'localhost',
+    'explore', 'settings', 'signin', 'signup', 'orders', 'leads', 'products', 'reviews', 'followups', 'store', 'verification', 'auth', ''
+  ];
+  if (!reservedPaths.includes(firstPathSegment) && isStorefrontSlug(firstPathSegment)) {
     return firstPathSegment;
   }
 
@@ -4127,7 +4141,12 @@ const AuthScreen = ({
         return "Please enter a valid email address.";
       case 'auth/too-many-requests':
         return "Login blocked temporarily due to excessive attempts. Reset password or try later.";
+      case 'auth/network-request-failed':
+        return "Connection failed (auth/network-request-failed). This is common inside sandboxed iframes or due to strict browser privacy settings/ad-blockers. Please try disabling your ad-blocker, or click 'Open App' in the top-right to run the app in a dedicated window where network requests succeed.";
       default:
+        if (error?.message && error.message.includes('network-request-failed')) {
+          return "Connection failed. Ad-blockers or iframe sandbox restrictions might be blocking the login server. Please click the 'Open App' button in the top right to use the site in a dedicated tab.";
+        }
         return error?.message || "Authentication failed. Please try again.";
     }
   };
@@ -4644,6 +4663,72 @@ const VerificationScreen = ({ user, showToast, onBypass }: VerificationScreenPro
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isFirestoreOffline, setIsFirestoreOffline] = useState(false);
+
+  // Connection status listener
+  useEffect(() => {
+    const handleStatus = (e: Event) => {
+      const isOff = (e as CustomEvent).detail?.isOffline;
+      setIsFirestoreOffline(!!isOff);
+    };
+    window.addEventListener('firestore-connection-status', handleStatus);
+    return () => {
+      window.removeEventListener('firestore-connection-status', handleStatus);
+    };
+  }, []);
+
+  // Routing State Manager
+  const [currentPath, setCurrentPath] = useState(() => {
+    return window.location.pathname.replace(/^\/+|\/+$/g, '').toLowerCase().trim();
+  });
+
+  const [selectedExploreProductId, setSelectedExploreProductId] = useState<string | null>(() => {
+    const raw = window.location.pathname.replace(/^\/+|\/+$/g, '').toLowerCase().trim();
+    if (raw.startsWith('explore/product/')) {
+      return raw.substring(16).trim();
+    }
+    return null;
+  });
+
+  // Listener to keep currentPath and selectedExploreProductId updated
+  useEffect(() => {
+    const handleLocationChange = () => {
+      const path = window.location.pathname.replace(/^\/+|\/+$/g, '').toLowerCase().trim();
+      setCurrentPath(path);
+      
+      if (path.startsWith('explore/product/')) {
+        const segments = window.location.pathname.replace(/^\/+|\/+$/g, '').trim().split('/');
+        if (segments[2]) {
+          setSelectedExploreProductId(segments[2]);
+        }
+      } else {
+        setSelectedExploreProductId(null);
+      }
+
+      // Sync public slug if the route corresponds to standard storefront, otherwise clear
+      const slug = resolveStorefrontSlug();
+      setPublicSlug(slug);
+    };
+
+    window.addEventListener('popstate', handleLocationChange);
+    window.addEventListener('pushstate_changed', handleLocationChange);
+    
+    // Initial check
+    handleLocationChange();
+
+    return () => {
+      window.removeEventListener('popstate', handleLocationChange);
+      window.removeEventListener('pushstate_changed', handleLocationChange);
+    };
+  }, []);
+
+  const pushRoute = (path: string) => {
+    const cleanPath = path.startsWith('/') ? path : `/${path}`;
+    window.history.pushState(null, '', cleanPath);
+    setTimeout(() => {
+      window.dispatchEvent(new Event('pushstate_changed'));
+    }, 0);
+  };
   
   // Public buyer storefront states
   const [publicBusiness, setPublicBusiness] = useState<BusinessProfile | null>(null);
@@ -4749,8 +4834,8 @@ export default function App() {
     
     if (slug) {
       console.log("Detected public buyer visiting storefront for slug:", slug);
-      setPublicSlug(slug);
       setIsPublicLoading(true);
+      setPublicError(null);
       
       // Load slug mapping to identify ownerId
       const slugDocRef = doc(db, 'slugs', slug);
@@ -4765,7 +4850,7 @@ export default function App() {
             getDocs(query(collection(db, 'reviews'), where('ownerId', '==', ownerId)))
           ]).then(([bizSnap, prodsSnap, reviewsSnap]) => {
             if (bizSnap.exists()) {
-              const bizData = bizSnap.data() as BusinessProfile;
+              const bizData = { ...bizSnap.data(), ownerId: bizSnap.id } as BusinessProfile;
               setPublicBusiness(bizData);
               
               const prods = prodsSnap.docs.map(d => ({ ...d.data(), id: d.id } as Product));
@@ -4800,8 +4885,14 @@ export default function App() {
         setPublicError("Connection lookup failed. Please try again.");
         setIsPublicLoading(false);
       });
+    } else {
+      setPublicBusiness(null);
+      setPublicProducts([]);
+      setPublicReviews([]);
+      setPublicError(null);
+      setIsPublicLoading(false);
     }
-  }, []);
+  }, [publicSlug]);
 
   const handlePublicAddReview = async (reviewData: any) => {
     if (!publicBusiness) return;
@@ -5300,6 +5391,90 @@ export default function App() {
     }
   };
 
+  if (currentPath === 'explore' || currentPath.startsWith('explore/')) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-[#FFFFFF] to-[#F5F3FF] text-[#1E1B4B]">
+        {/* Navigation Sticky Header */}
+        <header className="bg-white/95 backdrop-blur-md border-b border-slate-200/60 sticky top-0 z-40 px-4 md:px-8 py-4 transition-all duration-300 shadow-sm">
+          <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2 cursor-pointer" onClick={() => pushRoute('/')}>
+              <div className="w-9 h-9 bg-slate-100/10 border border-[#5B2FD4] rounded-xl flex items-center justify-center font-black italic text-[#5B2FD4] text-lg select-none shadow-[0_2px_10px_rgba(91,47,212,0.1)]">
+                M
+              </div>
+              <span className="font-sans font-black tracking-tight text-lg text-slate-950 uppercase italic">
+                MySellFlow
+              </span>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={() => pushRoute('/')}
+                className="text-slate-600 hover:text-[#5B2FD4] font-black uppercase text-[10px] tracking-widest px-4 py-2 rounded-xl transition-all cursor-pointer"
+              >
+                Go Home
+              </button>
+              {user ? (
+                <button 
+                  onClick={() => {
+                    localStorage.removeItem('bypass_email_verification');
+                    pushRoute('/dashboard');
+                    window.location.reload();
+                  }}
+                  className="bg-slate-950 hover:bg-[#5B2FD4] text-white font-black uppercase text-[10px] tracking-widest px-4 py-2.5 rounded-xl transition-all shadow-md cursor-pointer"
+                >
+                  Dashboard ↗
+                </button>
+              ) : (
+                <button 
+                  onClick={() => {
+                    setAuthTab('signin');
+                    setShowAuth(true);
+                    pushRoute('/');
+                  }}
+                  className="bg-slate-950 hover:bg-[#5B2FD4] text-white font-black uppercase text-[10px] tracking-widest px-4 py-2.5 rounded-xl transition-all shadow-md cursor-pointer opacity-100"
+                >
+                  Log In ↗
+                </button>
+              )}
+            </div>
+          </div>
+        </header>
+
+        <ExplorePage 
+          currentProductId={selectedExploreProductId || undefined}
+          onSelectProduct={(id) => {
+            if (id) {
+              pushRoute(`explore/product/${id}`);
+            } else {
+              pushRoute('explore');
+            }
+          }}
+          onNavigateToStore={(slug) => {
+            pushRoute(`store/${slug}`);
+          }}
+          onAddToCartForStore={(prod, slug) => {
+            try {
+              const storageKey = `storefront_cart_${slug}`;
+              const saved = localStorage.getItem(storageKey);
+              let cart: any[] = saved ? JSON.parse(saved) : [];
+              const existing = cart.find(item => item.product.id === prod.id);
+              if (existing) {
+                cart = cart.map(item => item.product.id === prod.id ? { ...item, quantity: item.quantity + 1 } : item);
+              } else {
+                cart.push({ product: prod, quantity: 1 });
+              }
+              localStorage.setItem(storageKey, JSON.stringify(cart));
+            } catch (err) {
+              console.error(err);
+            }
+          }}
+          showToast={showToast}
+        />
+        <ToastContainer toasts={toasts} onClose={(id) => setToasts(prev => prev.filter(t => t.id !== id))} />
+      </div>
+    );
+  }
+
   if (publicSlug) {
     if (isPublicLoading) {
       return (
@@ -5488,6 +5663,18 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#FFFFFF] to-[#F5F3FF] font-sans selection:bg-[#5B2FD4]/10 selection:text-[#5B2FD4]">
+      {isFirestoreOffline && (
+        <div className="bg-amber-500 text-white px-4 py-2.5 text-center text-[10px] md:text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 relative z-50 border-b border-amber-600 shadow-md">
+          <span>⚠️ Connection limited inside sandbox: App is running in high-speed offline mode</span>
+          <button 
+            type="button" 
+            onClick={() => window.location.reload()} 
+            className="underline hover:text-amber-100 font-black text-[9px] uppercase tracking-wider ml-1 px-2 py-1 rounded bg-amber-600/30 border border-white/10 hover:bg-amber-600/50 cursor-pointer"
+          >
+            Reconnect
+          </button>
+        </div>
+      )}
       <Sidebar activePage={activePage} setActivePage={setActivePage} lowStockCount={lowStockCount} unseenReviewsCount={unseenReviewsCount} />
       <MobileNav activePage={activePage} setActivePage={setActivePage} lowStockCount={lowStockCount} unseenReviewsCount={unseenReviewsCount} />
       
