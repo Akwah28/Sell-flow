@@ -251,10 +251,11 @@ export default function ExplorePage({
         const bizMap: { [ownerId: string]: BusinessProfile } = {};
         bizSnap.forEach(doc => {
           const biz = doc.data() as BusinessProfile;
+          const ownerIdFallback = biz.ownerId || doc.id;
+          const resolvedBiz = { ...biz, ownerId: ownerIdFallback };
+          bizMap[doc.id] = resolvedBiz;
           if (biz.ownerId) {
-            bizMap[biz.ownerId] = biz;
-          } else {
-            bizMap[doc.id] = { ...biz, ownerId: doc.id };
+            bizMap[biz.ownerId] = resolvedBiz;
           }
         });
 
@@ -310,7 +311,8 @@ export default function ExplorePage({
             if (!storeData) {
               const bizDoc = await getDoc(doc(db, 'businesses', prodData.ownerId));
               if (bizDoc.exists()) {
-                storeData = bizDoc.data() as BusinessProfile;
+                const data = bizDoc.data() as BusinessProfile;
+                storeData = { ...data, ownerId: data.ownerId || bizDoc.id };
               }
             }
             setActiveStore(storeData || null);
