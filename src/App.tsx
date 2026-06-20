@@ -44,6 +44,7 @@ import {
 import { motion, AnimatePresence, animate } from 'framer-motion';
 import LandingPage from './components/LandingPage';
 import ExplorePage from './components/ExplorePage';
+import { OnboardingFlow, SetupChecklistCard } from './components/OnboardingFlow';
 import { 
   BarChart, 
   Bar, 
@@ -912,7 +913,9 @@ const Dashboard = ({
   onEditProduct,
   onViewProducts,
   onViewReviews,
-  onViewLeads
+  onViewLeads,
+  onOpenWizard,
+  showToast
 }: { 
   business: BusinessProfile, 
   leads: Lead[], 
@@ -926,7 +929,9 @@ const Dashboard = ({
   onEditProduct?: (p: Product) => void,
   onViewProducts?: () => void,
   onViewReviews?: () => void,
-  onViewLeads?: () => void
+  onViewLeads?: () => void,
+  onOpenWizard: () => void,
+  showToast: (msg: string, type: 'success' | 'error' | 'info') => void
 }) => {
   const unreadReviews = (reviews || []).filter(r => !r.isRead);
   const totalRevenue = orders.reduce((sum, o) => sum + (o.paymentStatus === 'paid' ? o.amount : 0), 0);
@@ -1079,6 +1084,14 @@ const Dashboard = ({
           </button>
         </div>
       </div>
+
+      {/* Setup Checklist Getting Started card */}
+      <SetupChecklistCard 
+        business={business} 
+        products={products} 
+        onOpenWizard={onOpenWizard} 
+        showToast={showToast} 
+      />
 
       {/* New Total Sales Card */}
       <div id="total_sales_card_container" className="w-full bg-[#5B2FD4] rounded-xl p-5 sm:p-6 text-white shadow-sm relative overflow-hidden flex flex-col justify-between">
@@ -2114,40 +2127,40 @@ const SettingsPage = ({ business, setBusiness, onLogout, showToast }: { business
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      {/* Direct Cloud Run URL */}
+                      {/* Subdomain URL */}
                       <div className="bg-white border border-slate-200/60 p-4 rounded-xl space-y-2 flex flex-col justify-between">
                         <div>
-                          <span className="text-[9px] font-black tracking-widest text-violet-600 uppercase flex items-center gap-1">
-                            <span>Direct Cloud Run URL</span>
+                          <span className="text-[9px] font-black tracking-widest text-[#5B2FD4] uppercase flex items-center gap-1">
+                            <span>Active Storefront URL</span>
                           </span>
                           <p className="text-[8px] text-slate-400 leading-normal mb-1">
-                            Official secure storefront URL hosted on Google Cloud. This handles paths, add-to-carts, payments, and invoices instantly.
+                            Your official secure storefront URL. This handles paths, add-to-carts, payments, and invoices instantly.
                           </p>
                           <p className="text-xs font-mono font-bold text-slate-800 select-all leading-relaxed truncate">
-                            https://sellflow-765078704458.europe-west2.run.app/{localBusiness.storeSlug || 'shop'}
+                            {(localBusiness.storeSlug || 'shop').toLowerCase().trim()}.mysellflow.store
                           </p>
                         </div>
                         <div className="flex gap-2 pt-2 border-t border-slate-100 mt-2">
                           <button
                             type="button"
                             onClick={async () => {
-                              const link = `https://sellflow-765078704458.europe-west2.run.app/${localBusiness.storeSlug || 'shop'}`;
+                              const subdomain = `${(localBusiness.storeSlug || 'shop').toLowerCase().trim()}.mysellflow.store`;
                               try {
-                                await navigator.clipboard.writeText(link);
-                                if (showToast) showToast("Direct Cloud Run link copied!", "success");
+                                await navigator.clipboard.writeText(subdomain);
+                                if (showToast) showToast("Storefront link copied!", "success");
                               } catch (e) {
                                 console.error(e);
                               }
                             }}
-                            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-violet-50 hover:bg-violet-100 border border-violet-100 text-violet-700 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all"
+                            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-violet-50 hover:bg-violet-100 border border-violet-100 text-[#5B2FD4] rounded-lg text-[10px] font-black uppercase tracking-wider transition-all"
                           >
                             <Copy size={11} /> Copy
                           </button>
                           <button
                             type="button"
                             onClick={() => {
-                              const link = `https://sellflow-765078704458.europe-west2.run.app/${localBusiness.storeSlug || 'shop'}`;
-                              window.open(link, '_blank');
+                              const subdomain = `${(localBusiness.storeSlug || 'shop').toLowerCase().trim()}.mysellflow.store`;
+                              window.open(`https://${subdomain}`, '_blank');
                             }}
                             className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-[10px] font-black uppercase tracking-wider transition-all"
                           >
@@ -2156,25 +2169,25 @@ const SettingsPage = ({ business, setBusiness, onLogout, showToast }: { business
                         </div>
                       </div>
 
-                      {/* Custom Subdomain */}
+                      {/* Share to WhatsApp */}
                       <div className="bg-white border border-slate-200/60 p-4 rounded-xl space-y-2 flex flex-col justify-between">
                         <div>
-                          <span className="text-[9px] font-black tracking-widest text-slate-400 uppercase">Custom Subdomain URL</span>
+                          <span className="text-[9px] font-black tracking-widest text-slate-400 uppercase">WhatsApp Share Hub</span>
                           <p className="text-[8px] text-slate-400 leading-normal mb-1">
-                            Your custom brand web address setup in Hostinger. Create a Hostinger redirect/forwarding record pointing here to your Direct Cloud Run URL.
+                            Quickly share your clean brand web address directly with your WhatsApp customers.
                           </p>
                           <p className="text-xs font-mono font-bold text-slate-800 select-all leading-relaxed truncate">
-                            {localBusiness.storeSlug || 'shop'}.mysellflow.store
+                            {(localBusiness.storeSlug || 'shop').toLowerCase().trim()}.mysellflow.store
                           </p>
                         </div>
                         <div className="flex gap-2 pt-2 border-t border-slate-100 mt-2">
                           <button
                             type="button"
                             onClick={async () => {
-                              const link = `https://${localBusiness.storeSlug || 'shop'}.mysellflow.store`;
+                              const subdomain = `${(localBusiness.storeSlug || 'shop').toLowerCase().trim()}.mysellflow.store`;
                               try {
-                                await navigator.clipboard.writeText(link);
-                                if (showToast) showToast("Custom subdomain link copied!", "success");
+                                await navigator.clipboard.writeText(subdomain);
+                                if (showToast) showToast("WhatsApp link copied!", "success");
                               } catch (e) {
                                 console.error(e);
                               }
@@ -2186,8 +2199,8 @@ const SettingsPage = ({ business, setBusiness, onLogout, showToast }: { business
                           <button
                             type="button"
                             onClick={() => {
-                              const link = `https://${localBusiness.storeSlug || 'shop'}.mysellflow.store`;
-                              const message = `Check out my storefront on mysellflow! Browse and order directly: ${link}`;
+                              const subdomain = `${(localBusiness.storeSlug || 'shop').toLowerCase().trim()}.mysellflow.store`;
+                              const message = `Check out my storefront on mysellflow! Browse and order directly: ${subdomain}`;
                               window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
                             }}
                             className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all"
@@ -4739,6 +4752,7 @@ export default function App() {
   const [publicError, setPublicError] = useState<string | null>(null);
 
   const [activePage, setActivePage] = useState('dashboard');
+  const [isWizardTriggered, setIsWizardTriggered] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [authTab, setAuthTab] = useState<'signin' | 'signup'>('signin');
   const [business, setBusiness] = useState<BusinessProfile>(INITIAL_BUSINESS);
@@ -4988,7 +5002,7 @@ export default function App() {
           name: user.displayName || user.email?.split('@')[0] || 'New Business',
           ownerId: user.uid,
           storeSlug: initialSlug,
-          storefrontUrl: `https://sellflow-765078704458.europe-west2.run.app/${initialSlug}`,
+          storefrontUrl: `https://${initialSlug}.mysellflow.store`,
           subdomain: `${initialSlug}.mysellflow.store`
         };
         setDoc(doc(db, 'slugs', initialSlug), {
@@ -5376,7 +5390,7 @@ export default function App() {
       
       // Normalize and calculated and save to Firestore
       updatedBusiness.storeSlug = slug;
-      updatedBusiness.storefrontUrl = `https://sellflow-765078704458.europe-west2.run.app/${slug}`;
+      updatedBusiness.storefrontUrl = `https://${slug}.mysellflow.store`;
       updatedBusiness.subdomain = `${slug}.mysellflow.store`;
 
       await setDoc(doc(db, 'slugs', slug), {
@@ -5620,6 +5634,8 @@ export default function App() {
             setEditingProduct(p);
             setIsProductModalOpen(true);
           }}
+          onOpenWizard={() => setIsWizardTriggered(true)}
+          showToast={showToast}
         />
       );
       case 'products': return (
@@ -5769,6 +5785,18 @@ export default function App() {
           </div>
         </div>
       </main>
+
+      {/* Complete Onboarding setup Wizard and celebrations overlay */}
+      {user && (
+        <OnboardingFlow 
+          business={business} 
+          products={products} 
+          userId={user.uid} 
+          showToast={showToast}
+          triggerOpenWizard={isWizardTriggered}
+          onCloseWizard={() => setIsWizardTriggered(false)}
+        />
+      )}
 
       {/* Render Toast Notifications */}
       <ToastContainer toasts={toasts} onClose={(id) => setToasts(prev => prev.filter(t => t.id !== id))} />
