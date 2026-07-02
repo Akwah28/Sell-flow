@@ -35,6 +35,8 @@ export interface Lead {
   notes: string;
   createdAt: string;
   ownerId: string;
+  amount?: number;
+  updatedAt?: string;
 }
 
 export interface FollowUp {

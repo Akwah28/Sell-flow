@@ -3,72 +3,48 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { GoogleGenAI } from "@google/genai";
 import { Lead, Product } from "../types";
 
-const getGeminiKey = (): string => {
+export async function generateFollowUpMessage(lead: Lead, product?: Product): Promise<string> {
   try {
-    return process.env.GEMINI_API_KEY || "";
-  } catch (e) {
-    return "";
-  }
-};
-
-export async function generateFollowUpMessage(lead: Lead, product?: Product) {
-  try {
-    const key = getGeminiKey();
-    if (!key) {
-      throw new Error("GEMINI_API_KEY not configured.");
-    }
-    const ai = new GoogleGenAI({ apiKey: key });
-    const prompt = `
-      You are mysellflow AI, a sales assistant for Nigerian WhatsApp sellers.
-      Lead Name: ${lead.name}
-      Product Interested in: ${product?.name || lead.interest}
-      Notes: ${lead.notes}
-      Status: ${lead.status}
-      
-      Suggest a friendly, persuasive WhatsApp follow-up message in Nigerian English (Pidgin or safe professional English).
-      The goal is to move the lead to the next stage (closer to payment).
-      Keep it short, use emojis, and sound human.
-    `;
-
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: prompt,
+    const response = await fetch("/api/ai/followup", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ lead, product }),
     });
-
-    return response.text;
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    return data.text || "Hello! I was just checking in to see if you are still interested in our products. Let me know if you have any questions!";
   } catch (error) {
-    console.warn("AI Follow-Up generative fallback:", error);
+    console.warn("Client AI Follow-Up fallback:", error);
     return "Hello! I was just checking in to see if you are still interested in our products. Let me know if you have any questions!";
   }
 }
 
-export async function getSalesInsight(leads: Lead[], orders: any[]) {
+export async function getSalesInsight(leads: Lead[], orders: any[]): Promise<string> {
   try {
-    const key = getGeminiKey();
-    if (!key) {
-      throw new Error("GEMINI_API_KEY not configured.");
-    }
-    const ai = new GoogleGenAI({ apiKey: key });
-    const prompt = `
-      Analyze these sales stats for a Nigerian business:
-      Total Leads: ${leads.length}
-      Total Orders: ${orders.length}
-      
-      Provide one short, punchy sentence of advice or insight for the seller to improve their sales today.
-      Focus on conversion or follow-up.
-    `;
-
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: prompt,
+    const response = await fetch("/api/ai/insight", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ leads, orders }),
     });
 
-    return response.text;
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.text || "Follow up with your most recent leads to increase conversion!";
   } catch (error) {
-    console.warn("AI Sales Insight fallback:", error);
+    console.warn("Client AI Sales Insight fallback:", error);
     return "Follow up with your most recent leads to increase conversion!";
   }
 }

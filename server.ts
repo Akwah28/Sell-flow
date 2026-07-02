@@ -6,8 +6,29 @@ import nodemailer from "nodemailer";
 import fs from "fs";
 import { initializeApp } from "firebase/app";
 import { initializeFirestore, doc, getDoc } from "firebase/firestore";
+import { GoogleGenAI } from "@google/genai";
 
 dotenv.config();
+
+// Lazy initialization of Gemini client to prevent startup crashes if key is missing
+let aiInstance: GoogleGenAI | null = null;
+
+function getGeminiClient(): GoogleGenAI {
+  if (aiInstance) return aiInstance;
+  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+  if (!apiKey) {
+    throw new Error("GEMINI_API_KEY or GOOGLE_API_KEY environment variable is not set.");
+  }
+  aiInstance = new GoogleGenAI({
+    apiKey: apiKey,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
+      }
+    }
+  });
+  return aiInstance;
+}
 
 // Extremely robust resolution of __filename and __dirname to prevent ESM/CommonJS/Bundler mismatch crashes
 const __filename = (typeof import.meta !== "undefined" && import.meta && import.meta.url)
@@ -202,6 +223,61 @@ async function startServer() {
     } catch (error) {
       console.error("Email Sending Error:", error);
       res.status(500).json({ error: "Failed to send email notification" });
+    }
+  });
+
+  // API Route: Generate Follow-up Message via Gemini
+  app.post("/api/ai/followup", async (req, res) => {
+    const { lead, product } = req.body;
+    try {
+      const ai = getGeminiClient();
+      const prompt = `
+        You are mysellflow AI, a sales assistant for Nigerian WhatsApp sellers.
+        Lead Name: ${lead.name}
+        Product Interested in: ${product?.name || lead.interest}
+        Notes: ${lead.notes || ''}
+        Status: ${lead.status}
+        
+        Suggest a friendly, persuasive WhatsApp follow-up message in Nigerian English (Pidgin or safe professional English).
+        The goal is to move the lead to the next stage (closer to payment).
+        Keep it short, use emojis, and sound human.
+      `;
+
+      const response = await ai.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: prompt,
+      });
+
+      res.json({ text: response.text });
+    } catch (error) {
+      console.warn("AI Follow-Up generative fallback used (API key issue or service rate-limiting).");
+      res.json({ text: "Hello! I was just checking in to see if you are still interested in our products. Let me know if you have any questions!" });
+    }
+  });
+
+  // API Route: Generate Sales Insight via Gemini
+  app.post("/api/ai/insight", async (req, res) => {
+    const { leads, orders } = req.body;
+    try {
+      const ai = getGeminiClient();
+      const prompt = `
+        Analyze these sales stats for a Nigerian business:
+        Total Leads: ${leads?.length || 0}
+        Total Orders: ${orders?.length || 0}
+        
+        Provide one short, punchy sentence of advice or insight for the seller to improve their sales today.
+        Focus on conversion or follow-up.
+      `;
+
+      const response = await ai.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: prompt,
+      });
+
+      res.json({ text: response.text });
+    } catch (error) {
+      console.warn("AI Sales Insight fallback used (API key issue or service rate-limiting).");
+      res.json({ text: "Follow up with your most recent leads to increase conversion!" });
     }
   });
 

@@ -18,6 +18,7 @@ import {
   ArrowUpRight, 
   ArrowDownRight,
   TrendingUp,
+  TrendingDown,
   DollarSign,
   Store,
   ExternalLink,
@@ -39,7 +40,10 @@ import {
   EyeOff,
   ShieldAlert,
   UploadCloud,
-  ArrowLeft
+  ArrowLeft,
+  Edit2,
+  Check,
+  X
 } from 'lucide-react';
 import { motion, AnimatePresence, animate } from 'framer-motion';
 import LandingPage from './components/LandingPage';
@@ -54,7 +58,9 @@ import {
   Tooltip, 
   ResponsiveContainer,
   AreaChart,
-  Area
+  Area,
+  LineChart,
+  Line
 } from 'recharts';
 import { cn, formatCurrency, compressImage } from './lib/utils';
 import { Product, Lead, Order, FollowUp, BusinessProfile, Review, LeadStatus, OrderStatus, ProductType, InventoryStatus } from './types';
@@ -498,18 +504,38 @@ const ProductModal = ({ isOpen, onClose, onSave, product }: { isOpen: boolean, o
   );
 };
 
-const QuickLeadModal = ({ isOpen, onClose, onAdd }: { isOpen: boolean, onClose: () => void, onAdd: (name: string, phone: string) => void }) => {
+const QuickLeadModal = ({ isOpen, onClose, onAdd, products }: { isOpen: boolean, onClose: () => void, onAdd: (name: string, phone: string, interest: string, amount: number) => void, products: Product[] }) => {
   const [name, setName] = React.useState('');
   const [phone, setPhone] = React.useState('');
+  const [selectedProdId, setSelectedProdId] = React.useState('custom');
+  const [interest, setInterest] = React.useState('General Inquiry');
+  const [amount, setAmount] = React.useState<number | string>('');
 
   if (!isOpen) return null;
+
+  const handleProductChange = (prodId: string) => {
+    setSelectedProdId(prodId);
+    if (prodId === 'custom') {
+      setInterest('General Inquiry');
+      setAmount('');
+    } else {
+      const prod = products.find(p => p.id === prodId);
+      if (prod) {
+        setInterest(prod.name);
+        setAmount(prod.price);
+      }
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (name && phone) {
-      onAdd(name, phone);
+      onAdd(name, phone, interest || 'General Inquiry', Number(amount) || 0);
       setName('');
       setPhone('');
+      setSelectedProdId('custom');
+      setInterest('General Inquiry');
+      setAmount('');
       onClose();
     }
   };
@@ -527,7 +553,7 @@ const QuickLeadModal = ({ isOpen, onClose, onAdd }: { isOpen: boolean, onClose: 
             <Plus className="rotate-45" size={20} />
           </button>
         </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
           <div className="space-y-1.5">
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Customer Name</label>
             <input 
@@ -551,8 +577,46 @@ const QuickLeadModal = ({ isOpen, onClose, onAdd }: { isOpen: boolean, onClose: 
               required
             />
           </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Link to Storefront Product</label>
+            <select
+              value={selectedProdId}
+              onChange={(e) => handleProductChange(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all"
+            >
+              <option value="custom">Custom Inquiry / Other</option>
+              {products.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Interest Item/Service</label>
+            <input 
+              type="text" 
+              value={interest}
+              onChange={(e) => setInterest(e.target.value)}
+              placeholder="e.g. Red Designer Heels"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all"
+              required
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Lead Deal Value (Price)</label>
+            <input 
+              type="number" 
+              value={amount}
+              onChange={(e) => setAmount(e.target.value === '' ? '' : Number(e.target.value))}
+              placeholder="e.g. 15000"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all font-mono"
+            />
+          </div>
+
           <p className="text-[10px] text-slate-400 italic serif leading-tight">
-            * This lead will be added with status "New". You can update interest and notes later.
+            * This lead will be added with status "New". You can update status and details in the list.
           </p>
           <div className="pt-2">
             <button 
@@ -900,6 +964,23 @@ const AnimatedCounter = ({ value, currency }: { value: number; currency: string 
 
 // --- PAGES ---
 
+// --- SAFE DATE PARSER ---
+const parseDate = (val: any): Date | null => {
+  if (!val) return null;
+  if (typeof val === 'string') {
+    const d = new Date(val);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  if (typeof val.toDate === 'function') {
+    return val.toDate();
+  }
+  if (typeof val.seconds === 'number') {
+    return new Date(val.seconds * 1000);
+  }
+  const d = new Date(val);
+  return isNaN(d.getTime()) ? null : d;
+};
+
 const Dashboard = ({ 
   business, 
   leads, 
@@ -955,37 +1036,72 @@ const Dashboard = ({
 
     const paidOrdersSum = orders.filter(o => {
       if (o.paymentStatus !== 'paid' || !o.createdAt) return false;
-      try {
-        const d = new Date(o.createdAt);
-        return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
-      } catch (e) {
-        return false;
-      }
+      const d = parseDate(o.createdAt);
+      if (!d) return false;
+      return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
     }).reduce((sum, o) => sum + (Number(o.amount) || 0), 0);
 
     const paidLeadsSum = leads.filter(l => {
-      if (l.status !== 'paid' || !l.createdAt) return false;
-      try {
-        const d = new Date(l.createdAt);
-        return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
-      } catch (e) {
-        return false;
-      }
+      if (l.status !== 'paid') return false;
+      const dateToUse = l.updatedAt || l.createdAt;
+      if (!dateToUse) return false;
+      const d = parseDate(dateToUse);
+      if (!d) return false;
+      return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
     }).reduce((sum, lead) => {
-      const matchedProduct = products.find(p => 
-        p.name.toLowerCase() === lead.interest.toLowerCase() || 
-        lead.interest.toLowerCase().includes(p.name.toLowerCase()) ||
-        p.name.toLowerCase().includes(lead.interest.toLowerCase())
-      );
-      const saleAmount = matchedProduct ? matchedProduct.price : 100;
-      return sum + saleAmount;
+      if (lead.amount !== undefined) {
+        return sum + (Number(lead.amount) || 0);
+      }
+      try {
+        const leadInterest = lead.interest || '';
+        const matchedProduct = products.find(p => {
+          const prodName = p.name || '';
+          return prodName.toLowerCase() === leadInterest.toLowerCase() || 
+                 leadInterest.toLowerCase().includes(prodName.toLowerCase()) ||
+                 prodName.toLowerCase().includes(leadInterest.toLowerCase());
+        });
+        const saleAmount = matchedProduct ? Number(matchedProduct.price) || 0 : 100;
+        return sum + saleAmount;
+      } catch (e) {
+        return sum + 100;
+      }
     }, 0);
+
+    return paidOrdersSum + paidLeadsSum;
+  };
+
+  const getAllTimeSales = () => {
+    const paidOrdersSum = orders.filter(o => o.paymentStatus === 'paid')
+      .reduce((sum, o) => sum + (Number(o.amount) || 0), 0);
+
+    const paidLeadsSum = leads.filter(l => l.status === 'paid')
+      .reduce((sum, lead) => {
+        if (lead.amount !== undefined) {
+          return sum + (Number(lead.amount) || 0);
+        }
+        try {
+          const leadInterest = lead.interest || '';
+          const matchedProduct = products.find(p => {
+            const prodName = p.name || '';
+            return prodName.toLowerCase() === leadInterest.toLowerCase() || 
+                   leadInterest.toLowerCase().includes(prodName.toLowerCase()) ||
+                   prodName.toLowerCase().includes(leadInterest.toLowerCase());
+          });
+          const saleAmount = matchedProduct ? Number(matchedProduct.price) || 0 : 100;
+          return sum + saleAmount;
+        } catch (e) {
+          return sum + 100;
+        }
+      }, 0);
 
     return paidOrdersSum + paidLeadsSum;
   };
 
   const thisMonthSales = getThisMonthSales();
   const formattedThisMonthSales = formatCurrency(thisMonthSales, currency || 'NGN');
+
+  const allTimeSales = getAllTimeSales();
+  const formattedAllTimeSales = formatCurrency(allTimeSales, currency || 'NGN');
 
   const getDailyStats = () => {
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -1007,7 +1123,8 @@ const Dashboard = ({
     orders.forEach(order => {
       if (!order.createdAt) return;
       try {
-        const orderDate = new Date(order.createdAt);
+        const orderDate = parseDate(order.createdAt);
+        if (!orderDate) return;
         const orderDateStr = orderDate.toDateString();
         const match = last7Days.find(day => day.dateStr === orderDateStr);
         if (match) {
@@ -1022,27 +1139,52 @@ const Dashboard = ({
 
     // Populate leads count by date
     leads.forEach(lead => {
-      if (!lead.createdAt) return;
-      try {
-        const leadDate = new Date(lead.createdAt);
-        const leadDateStr = leadDate.toDateString();
-        const match = last7Days.find(day => day.dateStr === leadDateStr);
-        if (match) {
-          match.leads += 1;
-          
-          // Dynamically count paid leads as sales based on matched product price or default
-          if (lead.status === 'paid') {
-            const matchedProduct = products.find(p => 
-              p.name.toLowerCase() === lead.interest.toLowerCase() || 
-              lead.interest.toLowerCase().includes(p.name.toLowerCase()) ||
-              p.name.toLowerCase().includes(lead.interest.toLowerCase())
-            );
-            const saleAmount = matchedProduct ? matchedProduct.price : 100;
-            match.sales += saleAmount;
+      // 1. Lead creation counts towards creation date
+      if (lead.createdAt) {
+        try {
+          const leadCreatedDate = parseDate(lead.createdAt);
+          if (leadCreatedDate) {
+            const leadDateStr = leadCreatedDate.toDateString();
+            const match = last7Days.find(day => day.dateStr === leadDateStr);
+            if (match) {
+              match.leads += 1;
+            }
           }
+        } catch (e) {
+          console.error("Error parsing lead creation date:", e);
         }
-      } catch (e) {
-        console.error("Error parsing lead date:", e);
+      }
+
+      // 2. Lead sales counts towards payment date (updatedAt or fallback to createdAt)
+      if (lead.status === 'paid') {
+        try {
+          const dateToUse = lead.updatedAt || lead.createdAt;
+          if (dateToUse) {
+            const leadPaidDate = parseDate(dateToUse);
+            if (leadPaidDate) {
+              const leadPaidDateStr = leadPaidDate.toDateString();
+              const match = last7Days.find(day => day.dateStr === leadPaidDateStr);
+              if (match) {
+                let saleAmount = 100;
+                if (lead.amount !== undefined) {
+                  saleAmount = Number(lead.amount) || 0;
+                } else {
+                  const leadInterest = lead.interest || '';
+                  const matchedProduct = products.find(p => {
+                    const prodName = p.name || '';
+                    return prodName.toLowerCase() === leadInterest.toLowerCase() || 
+                           leadInterest.toLowerCase().includes(prodName.toLowerCase()) ||
+                           prodName.toLowerCase().includes(leadInterest.toLowerCase());
+                  });
+                  saleAmount = matchedProduct ? Number(matchedProduct.price) || 0 : 100;
+                }
+                match.sales += saleAmount;
+              }
+            }
+          }
+        } catch (e) {
+          console.error("Error parsing lead payment date:", e);
+        }
       }
     });
 
@@ -1053,7 +1195,112 @@ const Dashboard = ({
     }));
   };
 
+  const get30DaySalesStats = () => {
+    const now = new Date();
+    
+    // Create an array for the last 30 calendar days
+    const last30Days = Array.from({ length: 30 }, (_, i) => {
+      const d = new Date();
+      d.setDate(now.getDate() - (29 - i));
+      return {
+        dateStr: d.toDateString(),
+        formattedDate: `${d.getDate()} ${d.toLocaleString('default', { month: 'short' })}`,
+        sales: 0
+      };
+    });
+
+    // Create an array for the previous 30 calendar days (day 31 to 60) for growth calculation
+    const prev30Days = Array.from({ length: 30 }, (_, i) => {
+      const d = new Date();
+      d.setDate(now.getDate() - (59 - i));
+      return {
+        dateStr: d.toDateString(),
+        sales: 0
+      };
+    });
+
+    // Sum matching orders by date
+    orders.forEach(order => {
+      if (order.paymentStatus !== 'paid' || !order.createdAt) return;
+      try {
+        const orderDate = parseDate(order.createdAt);
+        if (!orderDate) return;
+        const orderDateStr = orderDate.toDateString();
+        
+        const matchLast = last30Days.find(day => day.dateStr === orderDateStr);
+        if (matchLast) {
+          matchLast.sales += Number(order.amount) || 0;
+        } else {
+          const matchPrev = prev30Days.find(day => day.dateStr === orderDateStr);
+          if (matchPrev) {
+            matchPrev.sales += Number(order.amount) || 0;
+          }
+        }
+      } catch (e) {
+        console.error("Error parsing order date for 30-day stats:", e);
+      }
+    });
+
+    // Sum matching paid leads by date
+    leads.forEach(lead => {
+      if (lead.status !== 'paid') return;
+      try {
+        const dateToUse = lead.updatedAt || lead.createdAt;
+        if (!dateToUse) return;
+        const leadPaidDate = parseDate(dateToUse);
+        if (!leadPaidDate) return;
+        const leadPaidDateStr = leadPaidDate.toDateString();
+        
+        let saleAmount = 100;
+        if (lead.amount !== undefined) {
+          saleAmount = Number(lead.amount) || 0;
+        } else {
+          const leadInterest = lead.interest || '';
+          const matchedProduct = products.find(p => {
+            const prodName = p.name || '';
+            return prodName.toLowerCase() === leadInterest.toLowerCase() || 
+                   leadInterest.toLowerCase().includes(prodName.toLowerCase()) ||
+                   prodName.toLowerCase().includes(leadInterest.toLowerCase());
+          });
+          saleAmount = matchedProduct ? Number(matchedProduct.price) || 0 : 100;
+        }
+
+        const matchLast = last30Days.find(day => day.dateStr === leadPaidDateStr);
+        if (matchLast) {
+          matchLast.sales += saleAmount;
+        } else {
+          const matchPrev = prev30Days.find(day => day.dateStr === leadPaidDateStr);
+          if (matchPrev) {
+            matchPrev.sales += saleAmount;
+          }
+        }
+      } catch (e) {
+        console.error("Error parsing lead date for 30-day stats:", e);
+      }
+    });
+
+    const totalLast30 = last30Days.reduce((sum, d) => sum + d.sales, 0);
+    const totalPrev30 = prev30Days.reduce((sum, d) => sum + d.sales, 0);
+
+    let growthPercent = 0;
+    if (totalPrev30 > 0) {
+      growthPercent = Math.round(((totalLast30 - totalPrev30) / totalPrev30) * 100);
+    } else if (totalLast30 > 0) {
+      growthPercent = 100; // 100% growth from 0 baseline
+    }
+
+    return {
+      chartData: last30Days.map(({ formattedDate, sales }) => ({
+        date: formattedDate,
+        sales
+      })),
+      growthPercent,
+      totalLast30
+    };
+  };
+
   const chartData = getDailyStats();
+  const { chartData: last30DaysSalesData, growthPercent: thirtyDayGrowthPercent } = get30DaySalesStats();
   const lowStockProducts = products.filter(p => p.inventoryStatus === 'low_stock');
 
   return (
@@ -1103,20 +1350,62 @@ const Dashboard = ({
             <p className="text-white/80 text-xs font-semibold uppercase tracking-widest mb-1.5">Total Sales</p>
             <div className="flex items-baseline gap-2.5 flex-wrap">
               <span className="text-3xl sm:text-4xl font-extrabold tracking-tight">
-                <AnimatedCounter value={thisMonthSales} currency={currency || 'NGN'} />
+                <AnimatedCounter value={allTimeSales} currency={currency || 'NGN'} />
               </span>
-              <span className="inline-flex items-center gap-1 bg-emerald-500/25 text-emerald-300 text-xs font-bold px-2.5 py-0.5 rounded-full select-none">
-                +18%
+              <span className={cn(
+                "inline-flex items-center gap-1 text-xs font-bold px-2.5 py-0.5 rounded-full select-none",
+                thirtyDayGrowthPercent >= 0 
+                  ? "bg-emerald-500/25 text-emerald-300" 
+                  : "bg-rose-500/25 text-rose-300"
+              )}>
+                {thirtyDayGrowthPercent >= 0 ? '+' : ''}{thirtyDayGrowthPercent}%
               </span>
             </div>
+            <p className="text-white/60 text-[10px] font-medium mt-1 uppercase tracking-wider">
+              Last 30 Days Trend
+            </p>
           </div>
           <div className="bg-white/10 p-2.5 rounded-xl border border-white/10 shadow-sm shrink-0">
-            <TrendingUp size={20} className="text-white" />
+            {thirtyDayGrowthPercent >= 0 ? (
+              <TrendingUp size={20} className="text-emerald-300" />
+            ) : (
+              <TrendingDown size={20} className="text-rose-300" />
+            )}
           </div>
         </div>
 
+        {/* Small Elegant Sparkline Line Chart */}
+        <div className="mt-4 h-16 z-10 bg-white/5 rounded-lg p-2 border border-white/10">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={last30DaysSalesData}>
+              <Tooltip 
+                content={({ active, payload }) => {
+                  if (active && payload && payload.length) {
+                    return (
+                      <div className="bg-slate-900 border border-white/10 text-white px-2 py-1.5 rounded-md text-[10px] font-bold shadow-md">
+                        <p className="text-slate-300 font-medium mb-0.5">{payload[0].payload.date}</p>
+                        <p className="font-mono text-emerald-400">{formatCurrency(payload[0].value as number, currency || 'NGN')}</p>
+                      </div>
+                    );
+                  }
+                  return null;
+                }}
+                cursor={{ stroke: 'rgba(255, 255, 255, 0.1)', strokeWidth: 1 }}
+              />
+              <Line 
+                type="monotone" 
+                dataKey="sales" 
+                stroke="#C084FC" 
+                strokeWidth={2} 
+                dot={false}
+                activeDot={{ r: 4, stroke: '#ffffff', strokeWidth: 1.5, fill: '#5B2FD4' }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+
         <div className="mt-4 pt-3.5 border-t border-white/10 flex justify-between items-center text-xs text-white/85 z-10">
-          <span className="font-semibold tracking-tight">This Month</span>
+          <span className="font-semibold tracking-tight">This Month: {formattedThisMonthSales}</span>
           <span className="text-white/60 text-[10px] font-mono">System-calculated KPI</span>
         </div>
       </div>
@@ -1399,12 +1688,14 @@ const Dashboard = ({
           </div>
           <div className="space-y-4">
             {leads.slice(0, 5).map((lead) => {
-              const matchedProduct = products.find(p => 
-                p.name.toLowerCase() === lead.interest.toLowerCase() || 
-                lead.interest.toLowerCase().includes(p.name.toLowerCase()) ||
-                p.name.toLowerCase().includes(lead.interest.toLowerCase())
-              );
-              const price = matchedProduct ? matchedProduct.price : 100;
+              const leadInterest = lead.interest || '';
+              const matchedProduct = products.find(p => {
+                const prodName = p.name || '';
+                return prodName.toLowerCase() === leadInterest.toLowerCase() || 
+                       leadInterest.toLowerCase().includes(prodName.toLowerCase()) ||
+                       prodName.toLowerCase().includes(leadInterest.toLowerCase());
+              });
+              const price = matchedProduct ? Number(matchedProduct.price) || 0 : 100;
               const formattedPrice = formatCurrency(price, currency || 'NGN');
 
               const leadOrders = orders.filter(o => o.leadId === lead.id);
@@ -1590,12 +1881,77 @@ const ProductsPage = ({ products, onAddProduct, onEditProduct, onDeleteProduct, 
   );
 };
 
-const LeadsPage = ({ leads, onAddLead, onUpdateStatus, onWhatsApp, onOpenImport, onDeleteLead }: { leads: Lead[], onAddLead: () => void, onUpdateStatus: (id: string, status: LeadStatus) => void, onWhatsApp: (lead: Lead, message: string) => void, onOpenImport: () => void, onDeleteLead?: (id: string) => void }) => {
+const LeadsPage = ({ 
+  leads, 
+  products,
+  currency,
+  onAddLead, 
+  onUpdateStatus, 
+  onUpdateLead,
+  onWhatsApp, 
+  onOpenImport, 
+  onDeleteLead 
+}: { 
+  leads: Lead[], 
+  products: Product[],
+  currency: string,
+  onAddLead: () => void, 
+  onUpdateStatus: (id: string, status: LeadStatus) => void, 
+  onUpdateLead: (id: string, fields: Partial<Lead>) => void,
+  onWhatsApp: (lead: Lead, message: string) => void, 
+  onOpenImport: () => void, 
+  onDeleteLead?: (id: string) => void 
+}) => {
   const statusCycle: LeadStatus[] = ['new', 'contacted', 'interested', 'paid', 'lost'];
   
   const getNextStatus = (current: LeadStatus) => {
     const idx = statusCycle.indexOf(current);
     return statusCycle[(idx + 1) % statusCycle.length];
+  };
+
+  const [editingLeadId, setEditingLeadId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editInterest, setEditInterest] = useState('');
+  const [editAmount, setEditAmount] = useState<number | string>('');
+
+  const handleStartEdit = (lead: Lead) => {
+    setEditingLeadId(lead.id);
+    setEditName(lead.name || '');
+    setEditPhone(lead.phone || '');
+    setEditInterest(lead.interest || '');
+    
+    let currentAmount = 0;
+    if (lead.amount !== undefined) {
+      currentAmount = lead.amount;
+    } else {
+      const matched = products.find(p => p.name.toLowerCase() === (lead.interest || '').toLowerCase());
+      currentAmount = matched ? matched.price : 100;
+    }
+    setEditAmount(currentAmount);
+  };
+
+  const handleProductSelectChange = (prodId: string) => {
+    if (prodId === 'custom') {
+      setEditInterest('General Inquiry');
+      setEditAmount('');
+    } else {
+      const prod = products.find(p => p.id === prodId);
+      if (prod) {
+        setEditInterest(prod.name);
+        setEditAmount(prod.price);
+      }
+    }
+  };
+
+  const handleSaveEdit = (leadId: string) => {
+    onUpdateLead(leadId, {
+      name: editName,
+      phone: editPhone,
+      interest: editInterest,
+      amount: Number(editAmount) || 0
+    });
+    setEditingLeadId(null);
   };
 
   return (
@@ -1622,68 +1978,200 @@ const LeadsPage = ({ leads, onAddLead, onUpdateStatus, onWhatsApp, onOpenImport,
       </div>
 
       <Card className="overflow-x-auto">
-        <table className="w-full text-left border-collapse min-w-[800px]">
+        <table className="w-full text-left border-collapse min-w-[850px]">
           <thead>
-            <tr className="border-bottom border-slate-100">
+            <tr className="border-bottom border-slate-100 bg-slate-50/50">
               <th className="p-4 italic serif text-xs uppercase tracking-widest text-slate-400 font-medium">Customer</th>
               <th className="p-4 italic serif text-xs uppercase tracking-widest text-slate-400 font-medium">Interest</th>
+              <th className="p-4 italic serif text-xs uppercase tracking-widest text-slate-400 font-medium">Deal Price</th>
               <th className="p-4 italic serif text-xs uppercase tracking-widest text-slate-400 font-medium">Status</th>
               <th className="p-4 italic serif text-xs uppercase tracking-widest text-slate-400 font-medium text-right">Action</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
-            {leads.map((lead) => (
-              <tr key={lead.id} className="hover:bg-slate-50/50 transition-colors group">
-                <td className="p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-[#5B2FD4] border border-[#5B2FD4]/20 flex items-center justify-center text-white font-bold text-xs uppercase shrink-0 shadow-sm shadow-[#5B2FD4]/10">
-                      {lead.name[0]}
-                    </div>
-                    <div>
-                      <p className="font-bold text-slate-900 leading-tight">{lead.name}</p>
-                      <p className="text-xs font-mono text-slate-400">{lead.phone}</p>
-                    </div>
-                  </div>
-                </td>
-                <td className="p-4">
-                  <div className="flex flex-col">
-                    <span className="text-sm text-slate-600 italic leading-none mb-1">{lead.interest}</span>
-                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-none">Source: {lead.source}</span>
-                  </div>
-                </td>
-                <td className="p-4">
-                  <button 
-                    onClick={() => onUpdateStatus(lead.id, getNextStatus(lead.status))}
-                    className="hover:scale-105 transition-transform active:scale-95"
-                    title="Click to cycle status"
-                  >
-                    <Badge variant={lead.status === 'paid' ? 'success' : lead.status === 'interested' ? 'info' : lead.status === 'lost' ? 'error' : lead.status === 'contacted' ? 'warning' : 'default'}>
-                      {lead.status}
-                    </Badge>
-                  </button>
-                </td>
-                <td className="p-4 text-right">
-                  <div className="flex justify-end gap-2">
-                    <button 
-                      onClick={() => {
-                        const message = `Hi ${lead.name}, checking back on your interest in ${lead.interest}!`;
-                        onWhatsApp(lead, message);
-                      }}
-                      className="bg-emerald-50 text-emerald-600 px-3 py-1.5 rounded-full text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1"
-                    >
-                      <MessageSquare size={12} /> WhatsApp
-                    </button>
-                    <button 
-                      onClick={() => onDeleteLead?.(lead.id)}
-                      className="bg-red-50 text-red-600 px-3 py-1.5 rounded-full text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1"
-                      title="Delete lead"
-                    >
-                      <Trash2 size={12} />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+            {leads.map((lead) => {
+              const isEditing = editingLeadId === lead.id;
+              
+              // Get current computed price
+              let displayPrice = 100;
+              if (lead.amount !== undefined) {
+                displayPrice = lead.amount;
+              } else {
+                const leadInterest = lead.interest || '';
+                const matchedProduct = products.find(p => {
+                  const prodName = p.name || '';
+                  return prodName.toLowerCase() === leadInterest.toLowerCase() || 
+                         leadInterest.toLowerCase().includes(prodName.toLowerCase()) ||
+                         prodName.toLowerCase().includes(leadInterest.toLowerCase());
+                });
+                displayPrice = matchedProduct ? matchedProduct.price : 100;
+              }
+
+              return (
+                <tr key={lead.id} className="hover:bg-slate-50/50 transition-colors group">
+                  {isEditing ? (
+                    <>
+                      {/* Editing Mode */}
+                      <td className="p-4 space-y-2 min-w-[200px]">
+                        <input
+                          type="text"
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                          className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-sky-500"
+                          placeholder="Name"
+                        />
+                        <input
+                          type="tel"
+                          value={editPhone}
+                          onChange={(e) => setEditPhone(e.target.value)}
+                          className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-sky-500"
+                          placeholder="WhatsApp Phone"
+                        />
+                      </td>
+                      <td className="p-4 space-y-2 min-w-[220px]">
+                        <select
+                          onChange={(e) => handleProductSelectChange(e.target.value)}
+                          className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-sky-500"
+                        >
+                          <option value="custom">-- Link Storefront Product --</option>
+                          {products.map(p => (
+                            <option key={p.id} value={p.id}>{p.name}</option>
+                          ))}
+                        </select>
+                        <input
+                          type="text"
+                          value={editInterest}
+                          onChange={(e) => setEditInterest(e.target.value)}
+                          className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-sky-500"
+                          placeholder="Interest"
+                        />
+                      </td>
+                      <td className="p-4 min-w-[120px]">
+                        <input
+                          type="number"
+                          value={editAmount}
+                          onChange={(e) => setEditAmount(e.target.value === '' ? '' : Number(e.target.value))}
+                          className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-sky-500"
+                          placeholder="Price"
+                        />
+                      </td>
+                      <td className="p-4">
+                        <Badge variant={lead.status === 'paid' ? 'success' : lead.status === 'interested' ? 'info' : lead.status === 'lost' ? 'error' : lead.status === 'contacted' ? 'warning' : 'default'}>
+                          {lead.status}
+                        </Badge>
+                      </td>
+                      <td className="p-4 text-right">
+                        <div className="flex justify-end gap-1.5">
+                          <button
+                            onClick={() => handleSaveEdit(lead.id)}
+                            className="bg-emerald-500 hover:bg-emerald-600 text-white p-2 rounded-lg transition-colors shadow-xs"
+                            title="Save changes"
+                          >
+                            <Check size={14} />
+                          </button>
+                          <button
+                            onClick={() => setEditingLeadId(null)}
+                            className="bg-slate-200 hover:bg-slate-300 text-slate-600 p-2 rounded-lg transition-colors"
+                            title="Cancel"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      {/* Normal Mode */}
+                      <td className="p-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-[#5B2FD4] border border-[#5B2FD4]/20 flex items-center justify-center text-white font-bold text-xs uppercase shrink-0 shadow-sm shadow-[#5B2FD4]/10">
+                            {lead.name ? lead.name[0] : '?'}
+                          </div>
+                          <div>
+                            <p className="font-bold text-slate-900 leading-tight">{lead.name}</p>
+                            <p className="text-xs font-mono text-slate-400 mt-0.5">{lead.phone}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        <div className="flex flex-col">
+                          <span className="text-sm text-slate-600 italic leading-none mb-1">{lead.interest}</span>
+                          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-none">Source: {lead.source}</span>
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        {lead.status === 'paid' ? (
+                          <div className="flex flex-col">
+                            <span className="text-sm font-extrabold text-emerald-600 font-mono">
+                              {formatCurrency(displayPrice, currency)}
+                            </span>
+                            <span className="text-[8px] text-emerald-500 font-black uppercase tracking-wider mt-0.5">
+                              ✓ Paid Sale
+                            </span>
+                          </div>
+                        ) : lead.status === 'lost' ? (
+                          <div className="flex flex-col">
+                            <span className="text-sm font-bold text-slate-400 font-mono line-through">
+                              {formatCurrency(displayPrice, currency)}
+                            </span>
+                            <span className="text-[8px] text-rose-500 font-black uppercase tracking-wider mt-0.5">
+                              ✗ Lost Deal
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col">
+                            <span className="text-sm font-bold text-slate-600 font-mono">
+                              {formatCurrency(displayPrice, currency)}
+                            </span>
+                            <span className="text-[8px] text-sky-500 font-black uppercase tracking-wider mt-0.5">
+                              ★ Potential
+                            </span>
+                          </div>
+                        )}
+                      </td>
+                      <td className="p-4">
+                        <button 
+                          onClick={() => onUpdateStatus(lead.id, getNextStatus(lead.status))}
+                          className="hover:scale-105 transition-transform active:scale-95"
+                          title="Click to cycle status"
+                        >
+                          <Badge variant={lead.status === 'paid' ? 'success' : lead.status === 'interested' ? 'info' : lead.status === 'lost' ? 'error' : lead.status === 'contacted' ? 'warning' : 'default'}>
+                            {lead.status}
+                          </Badge>
+                        </button>
+                      </td>
+                      <td className="p-4 text-right">
+                        <div className="flex justify-end gap-1.5">
+                          <button
+                            onClick={() => handleStartEdit(lead)}
+                            className="bg-sky-50 text-sky-600 hover:bg-sky-100 p-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-2xs hover:shadow-xs"
+                            title="Edit lead details & price"
+                          >
+                            <Edit2 size={12} />
+                          </button>
+                          <button 
+                            onClick={() => {
+                              const message = `Hi ${lead.name}, checking back on your interest in ${lead.interest}!`;
+                              onWhatsApp(lead, message);
+                            }}
+                            className="bg-emerald-50 text-emerald-600 hover:bg-emerald-100 p-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-2xs hover:shadow-xs"
+                          >
+                            <MessageSquare size={12} />
+                          </button>
+                          <button 
+                            onClick={() => onDeleteLead?.(lead.id)}
+                            className="bg-red-50 text-red-600 hover:bg-red-100 p-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-2xs hover:shadow-xs"
+                            title="Delete lead"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      </td>
+                    </>
+                  )}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </Card>
@@ -2461,7 +2949,7 @@ const StorefrontPreview = ({
   products: Product[], 
   reviews: Review[], 
   onAddReview: (r: any) => void, 
-  onStoreLead: (name: string, phone: string, interest: string) => void,
+  onStoreLead: (name: string, phone: string, interest: string, amount?: number) => void,
   isPreview?: boolean
 }) => {
   const isPublicRoute = resolveStorefrontSlug() !== null;
@@ -2603,14 +3091,14 @@ const StorefrontPreview = ({
         });
         message += `\nTotal: ${formatCurrency(cartTotal, business.currency)}\n\nPlease let me know how to make payments.`;
         
-        onStoreLead(name, phone, `Cart Checkout (${cart.length} items)`);
+        onStoreLead(name, phone, `Cart Checkout (${cart.length} items)`, cartTotal);
         const waUrl = `https://wa.me/${business.whatsappNumber.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(message)}`;
         window.open(waUrl, '_blank');
         
         setCart([]);
         setIsInquiryOpen(false);
       } else {
-        onStoreLead(name, phone, selectedProduct?.name || 'General Store Inquiry');
+        onStoreLead(name, phone, selectedProduct?.name || 'General Store Inquiry', selectedProduct?.price || 0);
         
         let message = "";
         if (selectedProduct) {
@@ -4926,7 +5414,7 @@ export default function App() {
     }
   };
 
-  const handlePublicStoreLead = async (name: string, phone: string, interest: string) => {
+  const handlePublicStoreLead = async (name: string, phone: string, interest: string, amount?: number) => {
     if (!publicBusiness) return;
     try {
       const leadRef = doc(collection(db, 'leads'));
@@ -4938,7 +5426,8 @@ export default function App() {
         createdAt: new Date().toISOString(),
         source: 'Storefront',
         interest,
-        notes: `Customer contact from storefront for: ${interest}`
+        notes: `Customer contact from storefront for: ${interest}`,
+        amount: amount !== undefined ? Number(amount) || 0 : 0
       };
       await setDoc(leadRef, newLead);
       showToast("Store order inquiry submitted successfully!", "success");
@@ -5101,17 +5590,18 @@ export default function App() {
     setIsAiLoading(false);
   };
 
-  const handleQuickLead = async (name: string, phone: string) => {
+  const handleQuickLead = async (name: string, phone: string, interest?: string, amount?: number) => {
     if (!user) return;
     const newLead: Omit<Lead, 'id'> = {
       name,
       phone,
       source: 'Quick Add',
-      interest: 'General Inquiry',
+      interest: interest || 'General Inquiry',
       status: 'new',
       notes: 'Added via quick form.',
       createdAt: new Date().toISOString(),
-      ownerId: user.uid
+      ownerId: user.uid,
+      amount: amount !== undefined ? Number(amount) || 0 : 0
     };
     try {
       await addDoc(collection(db, 'leads'), newLead);
@@ -5207,7 +5697,7 @@ export default function App() {
     setEditingProduct(null);
   };
 
-  const handleStoreLead = async (name: string, phone: string, interest: string) => {
+  const handleStoreLead = async (name: string, phone: string, interest: string, amount?: number) => {
     if (!user) return;
     const newLead: Omit<Lead, 'id'> = {
       name,
@@ -5217,7 +5707,8 @@ export default function App() {
       status: 'new',
       notes: `Customer inquiry from storefront for: ${interest}`,
       createdAt: new Date().toISOString(),
-      ownerId: user.uid
+      ownerId: user.uid,
+      amount: amount !== undefined ? Number(amount) || 0 : 0
     };
     
     try {
@@ -5352,7 +5843,10 @@ export default function App() {
 
   const handleUpdateLeadStatus = async (id: string, status: LeadStatus) => {
     try {
-      await updateDoc(doc(db, 'leads', id), { status });
+      await updateDoc(doc(db, 'leads', id), { 
+        status,
+        updatedAt: new Date().toISOString()
+      });
     } catch (e) {
       handleFirestoreError(e, OperationType.UPDATE, 'leads');
       return;
@@ -5376,6 +5870,18 @@ export default function App() {
         );
       }
       showToast(`Celebration! Lead goal met! Record updated.`, "success");
+    }
+  };
+
+  const handleUpdateLead = async (id: string, fields: Partial<Lead>) => {
+    try {
+      await updateDoc(doc(db, 'leads', id), {
+        ...fields,
+        updatedAt: new Date().toISOString()
+      });
+      showToast("Lead details updated.", "success");
+    } catch (e) {
+      handleFirestoreError(e, OperationType.UPDATE, 'leads');
     }
   };
 
@@ -5653,7 +6159,19 @@ export default function App() {
           currency={business.currency} 
         />
       );
-      case 'leads': return <LeadsPage leads={leads} onAddLead={() => setIsLeadModalOpen(true)} onUpdateStatus={handleUpdateLeadStatus} onWhatsApp={handleWhatsApp} onOpenImport={() => setIsImportModalOpen(true)} onDeleteLead={(id) => setDeleteConf({ isOpen: true, type: 'lead', id })} />;
+      case 'leads': return (
+        <LeadsPage 
+          leads={leads} 
+          products={products}
+          currency={business.currency}
+          onAddLead={() => setIsLeadModalOpen(true)} 
+          onUpdateStatus={handleUpdateLeadStatus} 
+          onUpdateLead={handleUpdateLead}
+          onWhatsApp={handleWhatsApp} 
+          onOpenImport={() => setIsImportModalOpen(true)} 
+          onDeleteLead={(id) => setDeleteConf({ isOpen: true, type: 'lead', id })} 
+        />
+      );
       case 'followups': return <FollowUpsPage leads={leads} onWhatsApp={handleWhatsApp} onRegenerate={handleRegenerateTip} />;
       case 'orders': return <OrdersPage orders={orders} leads={leads} products={products} currency={business.currency} showToast={showToast} />;
       case 'reviews': return <ReviewsPage reviews={reviews} products={products} />;
@@ -5679,28 +6197,17 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#FFFFFF] to-[#F5F3FF] font-sans selection:bg-[#5B2FD4]/10 selection:text-[#5B2FD4]">
-      {isFirestoreOffline && (
-        <div className="bg-amber-500 text-white px-4 py-2.5 text-center text-[10px] md:text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 relative z-50 border-b border-amber-600 shadow-md">
-          <span>⚠️ Connection limited inside sandbox: App is running in high-speed offline mode</span>
-          <button 
-            type="button" 
-            onClick={() => window.location.reload()} 
-            className="underline hover:text-amber-100 font-black text-[9px] uppercase tracking-wider ml-1 px-2 py-1 rounded bg-amber-600/30 border border-white/10 hover:bg-amber-600/50 cursor-pointer"
-          >
-            Reconnect
-          </button>
-        </div>
-      )}
       <Sidebar activePage={activePage} setActivePage={setActivePage} lowStockCount={lowStockCount} unseenReviewsCount={unseenReviewsCount} />
       <MobileNav activePage={activePage} setActivePage={setActivePage} lowStockCount={lowStockCount} unseenReviewsCount={unseenReviewsCount} />
       
       <main className="lg:ml-64 min-h-screen flex flex-col pb-20 lg:pb-8">
         <UserProfile business={business} onClick={() => setActivePage('settings')} />
 
-        <QuickLeadModal 
+         <QuickLeadModal 
           isOpen={isLeadModalOpen} 
           onClose={() => setIsLeadModalOpen(false)} 
           onAdd={handleQuickLead} 
+          products={products}
         />
 
         <ImportLeadsModal 
