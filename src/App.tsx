@@ -5164,6 +5164,8 @@ const VerificationScreen = ({ user, showToast, onBypass }: VerificationScreenPro
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
+  const impersonationTargetUid = localStorage.getItem('impersonation_target_uid');
+  const activeUid = impersonationTargetUid || user?.uid || '';
   const [isLoading, setIsLoading] = useState(true);
   const [isFirestoreOffline, setIsFirestoreOffline] = useState(false);
 
@@ -5492,12 +5494,13 @@ export default function App() {
 
   // Data Persistence Listeners
   useEffect(() => {
-    const isBypassed = localStorage.getItem('bypass_email_verification') === 'true' || user?.email?.toLowerCase() === 'godgiftakwah28@gmail.com';
-    if (!user || (!user.emailVerified && !isBypassed)) return;
-    isFirstReviewsLoad.current = true;
-
     const impersonationTargetUid = localStorage.getItem('impersonation_target_uid');
-    const activeUid = impersonationTargetUid || user.uid;
+    const activeUid = impersonationTargetUid || user?.uid;
+    if (!activeUid) return;
+
+    const isBypassed = localStorage.getItem('bypass_email_verification') === 'true' || user?.email?.toLowerCase() === 'godgiftakwah28@gmail.com' || impersonationTargetUid;
+    if (user && !user.emailVerified && !isBypassed) return;
+    isFirstReviewsLoad.current = true;
 
     // 1. Business Profile
     console.log("Setting up Firestore listeners for UID:", activeUid);
@@ -5515,7 +5518,7 @@ export default function App() {
         const initialSlug = (INITIAL_BUSINESS.storeSlug || 'shop').toLowerCase().trim();
         const newBusiness: BusinessProfile = {
           ...INITIAL_BUSINESS,
-          name: user.displayName || user.email?.split('@')[0] || 'New Business',
+          name: user?.displayName || user?.email?.split('@')[0] || 'New Business',
           ownerId: activeUid,
           storeSlug: initialSlug,
           storefrontUrl: `https://${initialSlug}.mysellflow.store`,
@@ -5596,7 +5599,7 @@ export default function App() {
       unsubOrders();
       unsubReviews();
     };
-  }, [user]);
+  }, [user, isImpersonating]);
 
   // Track activePage and reset unseen review count when on reviews page
   useEffect(() => {
@@ -5618,7 +5621,7 @@ export default function App() {
   };
 
   const handleQuickLead = async (name: string, phone: string, interest?: string, amount?: number) => {
-    if (!user) return;
+    if (!activeUid) return;
     const newLead: Omit<Lead, 'id'> = {
       name,
       phone,
@@ -5627,7 +5630,7 @@ export default function App() {
       status: 'new',
       notes: 'Added via quick form.',
       createdAt: new Date().toISOString(),
-      ownerId: user.uid,
+      ownerId: activeUid,
       amount: amount !== undefined ? Number(amount) || 0 : 0
     };
     try {
@@ -5638,7 +5641,7 @@ export default function App() {
   };
 
   const handleImportLeads = async (importedLeads: {name: string, phone: string}[]) => {
-    if (!user) return;
+    if (!activeUid) return;
     
     setIsAiLoading(true); // Re-using this for loading indicator during batch import
     let count = 0;
@@ -5654,7 +5657,7 @@ export default function App() {
         status: 'new',
         notes: 'Imported via CSV.',
         createdAt: new Date().toISOString(),
-        ownerId: user.uid
+        ownerId: activeUid
       };
       
       try {
@@ -5710,7 +5713,7 @@ export default function App() {
 
       const newProduct = {
         ...sanitizedCreate,
-        ownerId: user.uid,
+        ownerId: activeUid,
         createdAt: serverTimestamp(),
         isActive: true
       };
@@ -5725,7 +5728,7 @@ export default function App() {
   };
 
   const handleStoreLead = async (name: string, phone: string, interest: string, amount?: number) => {
-    if (!user) return;
+    if (!activeUid) return;
     const newLead: Omit<Lead, 'id'> = {
       name,
       phone,
@@ -5734,7 +5737,7 @@ export default function App() {
       status: 'new',
       notes: `Customer inquiry from storefront for: ${interest}`,
       createdAt: new Date().toISOString(),
-      ownerId: user.uid,
+      ownerId: activeUid,
       amount: amount !== undefined ? Number(amount) || 0 : 0
     };
     
@@ -5820,11 +5823,11 @@ export default function App() {
   };
 
   const handleCreateOrder = async (orderData: Omit<Order, 'id'>) => {
-    if (!user) return;
+    if (!activeUid) return;
     try {
       const docRef = await addDoc(collection(db, 'orders'), {
         ...orderData,
-        ownerId: user.uid,
+        ownerId: activeUid,
         createdAt: new Date().toISOString()
       });
     } catch (e) {
@@ -5855,11 +5858,11 @@ export default function App() {
   };
 
   const handleAddReview = async (reviewData: Omit<Review, 'id' | 'ownerId'>) => {
-    if (!user) return;
+    if (!activeUid) return;
     try {
       await addDoc(collection(db, 'reviews'), {
         ...reviewData,
-        ownerId: user.uid,
+        ownerId: activeUid,
         createdAt: new Date().toISOString(),
         isRead: false
       });
@@ -5913,7 +5916,7 @@ export default function App() {
   };
 
   const saveSettings = async (updatedBusiness: BusinessProfile) => {
-    if (!user) return;
+    if (!activeUid) return;
     try {
       const slug = (updatedBusiness.storeSlug || '').toLowerCase().trim();
       if (!isStorefrontSlug(slug)) {
@@ -5927,11 +5930,11 @@ export default function App() {
       updatedBusiness.subdomain = `${slug}.mysellflow.store`;
 
       await setDoc(doc(db, 'slugs', slug), {
-        ownerId: user.uid,
+        ownerId: activeUid,
         businessName: updatedBusiness.name
       });
       
-      await setDoc(doc(db, 'businesses', user.uid), updatedBusiness);
+      await setDoc(doc(db, 'businesses', activeUid), updatedBusiness);
       showToast("Settings saved successfully!", "success");
     } catch (e) {
       handleFirestoreError(e, OperationType.WRITE, 'businesses');
@@ -6113,7 +6116,7 @@ export default function App() {
     );
   }
 
-  if (!user) {
+  if (!user && !impersonationTargetUid) {
     if (showAuth) {
       return (
         <>
@@ -6145,8 +6148,8 @@ export default function App() {
   }
 
   // Verification Gate for Email/Password users
-  const isBypassed = localStorage.getItem('bypass_email_verification') === 'true' || user?.email?.toLowerCase() === 'godgiftakwah28@gmail.com';
-  if (!user.emailVerified && !isBypassed) {
+  const isBypassed = localStorage.getItem('bypass_email_verification') === 'true' || user?.email?.toLowerCase() === 'godgiftakwah28@gmail.com' || !!impersonationTargetUid;
+  if (user && !user.emailVerified && !isBypassed) {
     return (
       <>
         <VerificationScreen 
@@ -6240,7 +6243,6 @@ export default function App() {
     }
   };
 
-  const impersonationTargetUid = localStorage.getItem('impersonation_target_uid');
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#FFFFFF] to-[#F5F3FF] font-sans selection:bg-[#5B2FD4]/10 selection:text-[#5B2FD4]">
@@ -6360,11 +6362,11 @@ export default function App() {
       </main>
 
       {/* Complete Onboarding setup Wizard and celebrations overlay */}
-      {user && (
+      {activeUid && (
         <OnboardingFlow 
           business={business} 
           products={products} 
-          userId={user.uid} 
+          userId={activeUid} 
           showToast={showToast}
           triggerOpenWizard={isWizardTriggered}
           onCloseWizard={() => setIsWizardTriggered(false)}

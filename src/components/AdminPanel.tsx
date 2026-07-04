@@ -60,7 +60,9 @@ export default function AdminPanel({
 }: AdminPanelProps) {
   const [isAdmin, setIsAdmin] = useState(true);
   const [checkingAdmin, setCheckingAdmin] = useState(false);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'stores' | 'revenue' | 'activity' | 'support' | 'fraud' | 'logs' | 'notifications' | 'settings'>('dashboard');
+  const [activePage, setActivePage] = useState<'dashboard' | 'stores' | 'operations'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'stores' | 'revenue' | 'activity' | 'support' | 'fraud' | 'logs' | 'notifications' | 'settings'>('dashboard'); // Legacy support
+  const [activeOpsTab, setActiveOpsTab] = useState<'users' | 'support' | 'logs' | 'fraud'>('users');
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
   
   // Auth Form State for Admin Login (if not authenticated)
@@ -665,7 +667,7 @@ export default function AdminPanel({
     <div className={`min-h-screen ${theme === 'dark' ? 'bg-slate-950 text-white' : 'bg-slate-50 text-slate-900'} font-sans antialiased flex transition-colors duration-200`}>
       
       {/* SIDEBAR NAVIGATION */}
-      <aside className={`w-64 border-r ${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'} shrink-0 hidden md:flex flex-col h-screen sticky top-0 z-30`}>
+      <aside className="hidden">
         <div className="p-6 border-b border-slate-800/40 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-purple-600 rounded-xl flex items-center justify-center font-black text-white text-md italic">
@@ -780,45 +782,83 @@ export default function AdminPanel({
         
         {/* TOP PANEL */}
         <header className={`p-4 md:p-6 border-b sticky top-0 z-20 flex items-center justify-between gap-4 backdrop-blur-md ${theme === 'dark' ? 'bg-slate-950/80 border-slate-800' : 'bg-white/80 border-slate-200'}`}>
-          <div className="flex items-center gap-2 md:hidden">
-            <div className="w-8 h-8 bg-purple-600 rounded-lg flex items-center justify-center font-black text-white italic">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-purple-600 rounded-xl flex items-center justify-center font-black text-white italic">
               {platformSettings.logoText || "M"}
             </div>
-            <span className="font-sans font-black tracking-tight text-xs uppercase italic text-purple-400">
-              Admin
+            <span className="font-sans font-black tracking-tight text-xs md:text-sm uppercase italic text-purple-400">
+              {platformSettings.platformName || "MySellFlow"} Admin
             </span>
           </div>
           
-          <div className="flex-1 max-w-md relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+          <div className="hidden sm:flex flex-1 max-w-xs relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
             <input 
               type="text" 
-              placeholder="Search users, stores, orders, parameters..."
+              placeholder="Search directory..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className={`w-full rounded-xl pl-10 pr-4 py-2 text-xs outline-none border transition-colors ${theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white focus:border-purple-500' : 'bg-white border-slate-200 text-slate-900 focus:border-purple-600'}`}
+              className={`w-full rounded-xl pl-9 pr-3 py-1.5 text-xs outline-none border transition-colors ${theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white focus:border-purple-500' : 'bg-white border-slate-200 text-slate-900 focus:border-purple-600'}`}
             />
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             {isImpersonating && (
-              <span className="bg-amber-500/20 text-amber-400 text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider animate-pulse flex items-center gap-1">
-                <ShieldAlert size={12} /> Impersonating Mode
+              <span className="bg-amber-500/20 text-amber-400 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider animate-pulse flex items-center gap-1">
+                <ShieldAlert size={10} /> Live
               </span>
             )}
             
             <button 
-              onClick={() => { downloadReport('sales'); }}
-              className="text-xs bg-purple-600/10 border border-purple-500/30 hover:bg-purple-600 text-purple-400 hover:text-white px-3 py-2 rounded-xl flex items-center gap-1.5 font-bold transition-all shadow-md"
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              className={`p-2 rounded-xl border ${theme === 'dark' ? 'border-slate-800 text-amber-400 hover:bg-slate-850' : 'border-slate-200 text-slate-500 hover:bg-slate-100'}`}
+              title="Toggle Theme Mode"
             >
-              <Download size={14} /> Quick Sales CSV
+              {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+            </button>
+
+            <button 
+              onClick={onLogout}
+              className="bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-white border border-rose-500/20 text-[10px] font-bold px-3 py-2 rounded-xl transition-all flex items-center gap-1"
+            >
+              <LogOut size={12} />
+              <span className="hidden xs:inline">Logout</span>
             </button>
           </div>
         </header>
 
         {/* WORKSPACE VIEW ROUTER */}
-        <div className="p-4 md:p-8 space-y-6">
+        <div className="p-4 md:p-8 space-y-6 pb-28">
           
+          {/* OPERATIONS HUB SUB-TABS PILOTS */}
+          {activePage === 'operations' && (
+            <div className="flex flex-wrap gap-1.5 p-1 bg-slate-900/60 border border-slate-800/40 rounded-2xl mb-6 overflow-x-auto scrollbar-none">
+              {[
+                { id: 'users', label: 'Merchants', icon: Users },
+                { id: 'support', label: 'Support Queue', icon: HelpCircle },
+                { id: 'logs', label: 'Audit Logs', icon: FileText },
+                { id: 'fraud', label: 'Security Alerts', icon: AlertTriangle },
+                { id: 'notifications', label: 'Broadcasts', icon: Bell },
+                { id: 'revenue', label: 'Revenue Analytics', icon: TrendingUp },
+                { id: 'activity', label: 'Activity Logs', icon: Activity },
+                { id: 'settings', label: 'Platform Settings', icon: Settings },
+              ].map(sub => {
+                const IconComp = sub.icon;
+                const isActive = activeTab === sub.id;
+                return (
+                  <button
+                    key={sub.id}
+                    onClick={() => { setActiveTab(sub.id as any); setSelectedUser(null); setSelectedStore(null); }}
+                    className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${isActive ? 'bg-purple-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                  >
+                    <IconComp size={13} />
+                    <span>{sub.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           {/* DASHBOARD TAB */}
           {activeTab === 'dashboard' && (
             <div className="space-y-6 animate-fade-in">
@@ -1131,65 +1171,117 @@ export default function AdminPanel({
 
           {/* STORE MONITORING */}
           {activeTab === 'stores' && (
-            <div className="space-y-6 animate-fade-in">
+            <div className="space-y-8 animate-fade-in pb-16">
               <div>
                 <h1 className="text-2xl font-black uppercase tracking-tight italic">Store Monitoring Hub</h1>
                 <p className="text-slate-400 text-xs mt-1">Review live seller activities, WhatsApp integration status, storefront layouts, and merchant verification status.</p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredStores.map(store => (
-                  <div key={store.ownerId} className={`p-5 rounded-3xl border ${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'} space-y-4`}>
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h3 className="text-md font-extrabold text-white truncate max-w-[150px]">{store.name}</h3>
-                        <p className="text-[10px] text-slate-400 font-medium">Slug: /store/{store.storeSlug}</p>
+              {/* HORIZONTAL VIEW */}
+              <div className="space-y-3">
+                <h3 className="text-xs font-black uppercase text-purple-400 tracking-wider">⭐️ Featured Stores (Horizontal View)</h3>
+                <div className="flex overflow-x-auto gap-4 pb-4 px-1 scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent snap-x">
+                  {filteredStores.map(store => (
+                    <div key={`horiz-${store.ownerId}`} className="w-80 shrink-0 snap-start p-5 rounded-3xl bg-slate-900 border border-slate-800/80 hover:border-purple-500/30 transition-all flex flex-col justify-between space-y-4 shadow-xl">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h4 className="text-sm font-extrabold text-white truncate max-w-[180px]">{store.name}</h4>
+                          <p className="text-[10px] text-purple-400 font-medium">/store/{store.storeSlug}</p>
+                        </div>
+                        <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${store.isVerified ? 'bg-indigo-500/20 text-indigo-400' : 'bg-amber-500/20 text-amber-400'}`}>
+                          {store.isVerified ? 'VERIFIED' : 'UNVERIFIED'}
+                        </span>
                       </div>
-                      <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${store.isVerified ? 'bg-indigo-500/20 text-indigo-400' : 'bg-amber-500/20 text-amber-400'}`}>
-                        {store.isVerified ? 'VERIFIED' : 'UNVERIFIED'}
-                      </span>
+                      <div className="text-xs text-slate-400 space-y-1">
+                        <div className="flex justify-between">
+                          <span>Views:</span>
+                          <span className="font-bold text-white">{store.views || 0}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Clicks:</span>
+                          <span className="font-bold text-indigo-400">{(store.clicksMessageMerchant || 0) + (store.clicksWhatsAppOrder || 0)}</span>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={() => window.open(`/store/${store.storeSlug}`, '_blank')}
+                          className="flex-1 bg-slate-950 hover:bg-slate-800 border border-slate-800 text-white text-[10px] font-black uppercase py-2 rounded-xl transition-all text-center"
+                        >
+                          Visit Store
+                        </button>
+                        <button 
+                          onClick={() => onImpersonate(store.ownerId, store.storeSlug)}
+                          className="px-3 bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-black uppercase py-2 rounded-xl transition-all"
+                          title="Impersonate Store"
+                        >
+                          <Play size={10} className="inline mr-1" /> Login
+                        </button>
+                      </div>
                     </div>
+                  ))}
+                  {filteredStores.length === 0 && (
+                    <p className="text-xs text-slate-400 italic py-4">No matching stores found.</p>
+                  )}
+                </div>
+              </div>
 
-                    <div className="space-y-2 border-y border-slate-800/40 py-3 text-xs">
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">Currency:</span>
-                        <span className="font-bold uppercase font-mono">{store.currency}</span>
+              {/* GRID VIEW */}
+              <div className="space-y-4 pt-4 border-t border-slate-900">
+                <h3 className="text-xs font-black uppercase text-purple-400 tracking-wider">🛍️ Stores Directory (Grid View)</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {filteredStores.map(store => (
+                    <div key={`grid-${store.ownerId}`} className={`p-5 rounded-3xl border ${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'} space-y-4`}>
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h3 className="text-md font-extrabold text-white truncate max-w-[150px]">{store.name}</h3>
+                          <p className="text-[10px] text-slate-400 font-medium">Slug: /store/{store.storeSlug}</p>
+                        </div>
+                        <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${store.isVerified ? 'bg-indigo-500/20 text-indigo-400' : 'bg-amber-500/20 text-amber-400'}`}>
+                          {store.isVerified ? 'VERIFIED' : 'UNVERIFIED'}
+                        </span>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">Total Views:</span>
-                        <span className="font-bold">{store.views || 0}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">Engagement clicks:</span>
-                        <span className="font-bold text-indigo-400">{(store.clicksMessageMerchant || 0) + (store.clicksWhatsAppOrder || 0)}</span>
-                      </div>
-                    </div>
 
-                    <div className="flex gap-2">
-                      <button 
-                        onClick={() => window.open(`/store/${store.storeSlug}`, '_blank')}
-                        className="flex-1 bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-white text-[10px] font-black uppercase py-2 rounded-xl transition-all text-center"
-                      >
-                        View Store
-                      </button>
-                      
-                      <button 
-                        onClick={async () => {
-                          const state = !store.isVerified;
-                          await updateDoc(doc(db, 'businesses', store.ownerId), { isVerified: state });
-                          await logAdminAction("Store Verification Toggled", `Set verification status of "${store.name}" to ${state}`);
-                          showToast(`Store verification updated!`, "success");
-                        }}
-                        className="bg-indigo-600/10 hover:bg-indigo-600 text-indigo-400 hover:text-white border border-indigo-500/20 text-[10px] font-black uppercase py-2 px-3 rounded-xl transition-all"
-                      >
-                        {store.isVerified ? 'Remove Verify' : 'Verify'}
-                      </button>
+                      <div className="space-y-2 border-y border-slate-800/40 py-3 text-xs">
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">Currency:</span>
+                          <span className="font-bold uppercase font-mono">{store.currency}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">Total Views:</span>
+                          <span className="font-bold">{store.views || 0}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">Engagement clicks:</span>
+                          <span className="font-bold text-indigo-400">{(store.clicksMessageMerchant || 0) + (store.clicksWhatsAppOrder || 0)}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={() => window.open(`/store/${store.storeSlug}`, '_blank')}
+                          className="flex-1 bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-white text-[10px] font-black uppercase py-2 rounded-xl transition-all text-center"
+                        >
+                          View Store
+                        </button>
+                        
+                        <button 
+                          onClick={async () => {
+                            const state = !store.isVerified;
+                            await updateDoc(doc(db, 'businesses', store.ownerId), { isVerified: state });
+                            await logAdminAction("Store Verification Toggled", `Set verification status of "${store.name}" to ${state}`);
+                            showToast(`Store verification updated!`, "success");
+                          }}
+                          className="bg-indigo-600/10 hover:bg-indigo-600 text-indigo-400 hover:text-white border border-indigo-500/20 text-[10px] font-black uppercase py-2 px-3 rounded-xl transition-all"
+                        >
+                          {store.isVerified ? 'Remove Verify' : 'Verify'}
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
-                {filteredStores.length === 0 && (
-                  <p className="text-xs text-slate-400 py-8 text-center italic">No digital storefront configurations resolved.</p>
-                )}
+                  ))}
+                  {filteredStores.length === 0 && (
+                    <p className="text-xs text-slate-400 py-8 text-center italic">No digital storefront configurations resolved.</p>
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -1605,6 +1697,43 @@ export default function AdminPanel({
 
         </div>
       </div>
+
+      {/* BOTTOM FLOATING NAVIGATION BAR */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-slate-900/95 border-t border-slate-800/85 backdrop-blur-xl py-3 px-6 shadow-[0_-10px_30px_rgba(0,0,0,0.5)] flex justify-around items-center">
+        <button 
+          onClick={() => { setActivePage('dashboard'); setActiveTab('dashboard'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+          className={`flex flex-col items-center gap-1 transition-all relative ${activePage === 'dashboard' ? 'text-purple-400 scale-105' : 'text-slate-500 hover:text-slate-300'}`}
+        >
+          <TrendingUp size={20} />
+          <span className="text-[9px] font-bold uppercase tracking-wider">Metrics</span>
+          {activePage === 'dashboard' && <span className="absolute -bottom-1 w-1 h-1 bg-purple-500 rounded-full" />}
+        </button>
+
+        <button 
+          onClick={() => { setActivePage('stores'); setActiveTab('stores'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+          className={`flex flex-col items-center gap-1 transition-all relative ${activePage === 'stores' ? 'text-purple-400 scale-105' : 'text-slate-500 hover:text-slate-300'}`}
+        >
+          <Store size={20} />
+          <span className="text-[9px] font-bold uppercase tracking-wider">Stores</span>
+          {activePage === 'stores' && <span className="absolute -bottom-1 w-1 h-1 bg-purple-500 rounded-full" />}
+        </button>
+
+        <button 
+          onClick={() => { 
+            setActivePage('operations'); 
+            if (activeTab === 'dashboard' || activeTab === 'stores') {
+              setActiveTab('users'); 
+            }
+            window.scrollTo({ top: 0, behavior: 'smooth' }); 
+          }}
+          className={`flex flex-col items-center gap-1 transition-all relative ${activePage === 'operations' ? 'text-purple-400 scale-105' : 'text-slate-500 hover:text-slate-300'}`}
+        >
+          <Shield size={20} />
+          <span className="text-[9px] font-bold uppercase tracking-wider">Control</span>
+          {activePage === 'operations' && <span className="absolute -bottom-1 w-1 h-1 bg-purple-500 rounded-full" />}
+        </button>
+      </div>
+
     </div>
   );
 }
