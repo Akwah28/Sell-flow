@@ -124,6 +124,73 @@
         "createdAt": { "type": "string" }
       },
       "required": ["name", "email", "message", "createdAt"]
+    },
+    "AdminProfile": {
+      "title": "Admin Profile",
+      "description": "System administrator user records",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "name": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["uid", "email", "createdAt"]
+    },
+    "SupportTicket": {
+      "title": "Support Ticket",
+      "description": "Customer support request ticket",
+      "type": "object",
+      "properties": {
+        "customerName": { "type": "string" },
+        "email": { "type": "string" },
+        "subject": { "type": "string" },
+        "message": { "type": "string" },
+        "status": { "type": "string", "enum": ["open", "closed", "assigned"] },
+        "assigneeId": { "type": "string" },
+        "assigneeName": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "replies": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "sender": { "type": "string" },
+              "message": { "type": "string" },
+              "createdAt": { "type": "string" }
+            }
+          }
+        }
+      },
+      "required": ["customerName", "email", "subject", "message", "status", "createdAt"]
+    },
+    "FraudAlert": {
+      "title": "Fraud Alert",
+      "description": "Automated security or fraud flag detection",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["fake_accounts", "spam_products", "login_attempts", "sales_spikes"] },
+        "description": { "type": "string" },
+        "severity": { "type": "string", "enum": ["low", "medium", "high"] },
+        "status": { "type": "string", "enum": ["active", "resolved"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["type", "description", "severity", "status", "createdAt"]
+    },
+    "AuditLog": {
+      "title": "Audit Log",
+      "description": "Immutable records of administrator actions",
+      "type": "object",
+      "properties": {
+        "adminId": { "type": "string" },
+        "adminEmail": { "type": "string" },
+        "action": { "type": "string" },
+        "targetId": { "type": "string" },
+        "details": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["adminId", "adminEmail", "action", "details", "createdAt"]
     }
   },
   "firestore": {
@@ -158,6 +225,22 @@
     "/contact_messages/{messageId}": {
       "schema": "ContactMessage",
       "description": "Contact form submissions"
+    },
+    "/admins/{adminId}": {
+      "schema": "AdminProfile",
+      "description": "System administrator user records"
+    },
+    "/support_tickets/{ticketId}": {
+      "schema": "SupportTicket",
+      "description": "Customer support requests"
+    },
+    "/fraud_alerts/{alertId}": {
+      "schema": "FraudAlert",
+      "description": "Automated system and transaction flags"
+    },
+    "/audit_logs/{logId}": {
+      "schema": "AuditLog",
+      "description": "Admin action history logs"
     }
   }
 }

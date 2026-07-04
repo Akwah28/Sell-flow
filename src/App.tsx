@@ -49,6 +49,7 @@ import { motion, AnimatePresence, animate } from 'framer-motion';
 import LandingPage from './components/LandingPage';
 import ExplorePage from './components/ExplorePage';
 import { OnboardingFlow, SetupChecklistCard } from './components/OnboardingFlow';
+import AdminPanel from './components/AdminPanel';
 import { 
   BarChart, 
   Bar, 
@@ -5240,6 +5241,29 @@ export default function App() {
   const [publicError, setPublicError] = useState<string | null>(null);
 
   const [activePage, setActivePage] = useState('dashboard');
+  const [isImpersonating, setIsImpersonating] = useState(() => {
+    return !!localStorage.getItem('impersonation_target_uid');
+  });
+
+  const handleImpersonate = (targetUid: string, targetSlug: string) => {
+    localStorage.setItem('impersonation_target_uid', targetUid);
+    setIsImpersonating(true);
+    showToast(`Entering impersonation mode for store "${targetSlug}"`, "success");
+    pushRoute('/dashboard');
+    setTimeout(() => {
+      window.location.reload();
+    }, 1200);
+  };
+
+  const handleStopImpersonating = () => {
+    localStorage.removeItem('impersonation_target_uid');
+    setIsImpersonating(false);
+    showToast("Impersonation mode ended. Returning to Admin Panel.", "info");
+    pushRoute('/admin');
+    setTimeout(() => {
+      window.location.reload();
+    }, 1200);
+  };
   const [isWizardTriggered, setIsWizardTriggered] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [authTab, setAuthTab] = useState<'signin' | 'signup'>('signin');
@@ -5472,16 +5496,19 @@ export default function App() {
     if (!user || (!user.emailVerified && !isBypassed)) return;
     isFirstReviewsLoad.current = true;
 
+    const impersonationTargetUid = localStorage.getItem('impersonation_target_uid');
+    const activeUid = impersonationTargetUid || user.uid;
+
     // 1. Business Profile
-    console.log("Setting up Firestore listeners for UID:", user.uid);
-    const unsubBusiness = onSnapshot(doc(db, 'businesses', user.uid), (snapshot) => {
+    console.log("Setting up Firestore listeners for UID:", activeUid);
+    const unsubBusiness = onSnapshot(doc(db, 'businesses', activeUid), (snapshot) => {
       if (snapshot.exists()) {
         console.log("Business profile found in Firestore");
         const data = snapshot.data();
         setBusiness({
           ...INITIAL_BUSINESS,
           ...data,
-          ownerId: user.uid // Ensure ownerId is correct
+          ownerId: activeUid // Ensure ownerId is correct
         } as BusinessProfile);
       } else {
         console.log("No business profile found, creating initial one...");
@@ -5489,24 +5516,24 @@ export default function App() {
         const newBusiness: BusinessProfile = {
           ...INITIAL_BUSINESS,
           name: user.displayName || user.email?.split('@')[0] || 'New Business',
-          ownerId: user.uid,
+          ownerId: activeUid,
           storeSlug: initialSlug,
           storefrontUrl: `https://${initialSlug}.mysellflow.store`,
           subdomain: `${initialSlug}.mysellflow.store`
         };
         setDoc(doc(db, 'slugs', initialSlug), {
-          ownerId: user.uid,
+          ownerId: activeUid,
           businessName: newBusiness.name
         }).catch(e => console.error("Initial slug map write failed:", e));
 
-        setDoc(doc(db, 'businesses', user.uid), newBusiness)
+        setDoc(doc(db, 'businesses', activeUid), newBusiness)
           .then(() => console.log("Initial business profile created successfully"))
           .catch(e => handleFirestoreError(e, OperationType.WRITE, 'businesses'));
       }
     }, (error) => handleFirestoreError(error, OperationType.GET, 'businesses'));
 
     // 2. Products
-    const qProducts = query(collection(db, 'products'), where('ownerId', '==', user.uid));
+    const qProducts = query(collection(db, 'products'), where('ownerId', '==', activeUid));
     const unsubProducts = onSnapshot(qProducts, (snapshot) => {
       console.log(`Products Listener: Received ${snapshot.docs.length} docs`);
       const prods = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Product));
@@ -5514,7 +5541,7 @@ export default function App() {
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'products'));
 
     // 3. Leads
-    const qLeads = query(collection(db, 'leads'), where('ownerId', '==', user.uid), orderBy('createdAt', 'desc'));
+    const qLeads = query(collection(db, 'leads'), where('ownerId', '==', activeUid), orderBy('createdAt', 'desc'));
     const unsubLeads = onSnapshot(qLeads, (snapshot) => {
       console.log(`Leads Listener: Received ${snapshot.docs.length} docs`);
       const lds = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Lead));
@@ -5522,7 +5549,7 @@ export default function App() {
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'leads'));
 
     // 4. Orders
-    const qOrders = query(collection(db, 'orders'), where('ownerId', '==', user.uid), orderBy('createdAt', 'desc'));
+    const qOrders = query(collection(db, 'orders'), where('ownerId', '==', activeUid), orderBy('createdAt', 'desc'));
     const unsubOrders = onSnapshot(qOrders, (snapshot) => {
       console.log(`Orders Listener: Received ${snapshot.docs.length} docs`);
       const ords = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Order));
@@ -5530,7 +5557,7 @@ export default function App() {
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'orders'));
 
     // 5. Reviews
-    const qReviews = query(collection(db, 'reviews'), where('ownerId', '==', user.uid), orderBy('createdAt', 'desc'));
+    const qReviews = query(collection(db, 'reviews'), where('ownerId', '==', activeUid), orderBy('createdAt', 'desc'));
     const unsubReviews = onSnapshot(qReviews, (snapshot) => {
       console.log(`Reviews Listener: Received ${snapshot.docs.length} docs`);
       const revs = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Review));
@@ -5911,6 +5938,24 @@ export default function App() {
     }
   };
 
+  const isAdminRoute = currentPath === 'admin' || currentPath.startsWith('admin/') || window.location.hostname.startsWith('admin.');
+  if (isAdminRoute) {
+    return (
+      <AdminPanel 
+        currentPath={currentPath}
+        adminUser={user}
+        onLogout={() => {
+          signOut(auth);
+          window.location.reload();
+        }}
+        onImpersonate={handleImpersonate}
+        isImpersonating={isImpersonating}
+        onStopImpersonating={handleStopImpersonating}
+        showToast={showToast}
+      />
+    );
+  }
+
   if (currentPath === 'explore' || currentPath.startsWith('explore/')) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-[#FFFFFF] to-[#F5F3FF] text-[#1E1B4B]">
@@ -6195,8 +6240,29 @@ export default function App() {
     }
   };
 
+  const impersonationTargetUid = localStorage.getItem('impersonation_target_uid');
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#FFFFFF] to-[#F5F3FF] font-sans selection:bg-[#5B2FD4]/10 selection:text-[#5B2FD4]">
+      {impersonationTargetUid && (
+        <div className="bg-red-600 text-white font-bold text-[10px] sm:text-xs py-3.5 px-6 text-center shrink-0 z-[10000] relative flex flex-col sm:flex-row items-center justify-between gap-3 shadow-lg uppercase tracking-widest border-b border-red-700">
+          <div className="flex items-center gap-2.5">
+            <span className="w-2.5 h-2.5 bg-white rounded-full animate-ping"></span>
+            <span>ADMINISTRATIVE OPERATIONS: impersonating store owner "{business?.name || 'Merchant'}"</span>
+          </div>
+          <button
+            onClick={() => {
+              localStorage.removeItem('impersonation_target_uid');
+              localStorage.removeItem('impersonation_admin_uid');
+              localStorage.removeItem('impersonation_admin_email');
+              window.location.href = '/admin';
+            }}
+            className="bg-white text-red-700 px-4 py-1.5 rounded-lg hover:bg-red-50 transition-all font-black shrink-0 cursor-pointer text-[10px]"
+          >
+            Terminate Session & Return to Admin Panel
+          </button>
+        </div>
+      )}
       <Sidebar activePage={activePage} setActivePage={setActivePage} lowStockCount={lowStockCount} unseenReviewsCount={unseenReviewsCount} />
       <MobileNav activePage={activePage} setActivePage={setActivePage} lowStockCount={lowStockCount} unseenReviewsCount={unseenReviewsCount} />
       
