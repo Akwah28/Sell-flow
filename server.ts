@@ -64,7 +64,12 @@ function getDb(): any {
 function isStorefrontSlug(path: string): boolean {
   if (!path) return false;
   if (path.includes('.')) return false;
-  const reserved = ['assets', 'api', 'dashboard', 'products', 'leads', 'followups', 'orders', 'reviews', 'settings', 'index.html', 'explore', 'store'];
+  const reserved = [
+    'assets', 'api', 'admin', 'dashboard', 'products', 'leads', 'followups', 
+    'orders', 'reviews', 'settings', 'index.html', 'explore', 'store', 
+    'storefront', 'verification', 'auth', 'signin', 'signup', 'www', 'app', 
+    'sales', 'support', 'mail', 'blog'
+  ];
   if (reserved.includes(path.toLowerCase())) return false;
   return /^[a-zA-Z0-9_\-]+$/.test(path);
 }
@@ -289,6 +294,26 @@ async function startServer() {
       appType: "spa",
     });
     app.use(vite.middlewares);
+
+    // Standard SPA catch-all for development routes (e.g., /dashboard, /admin)
+    app.get("*", async (req, res, next) => {
+      // Exclude API paths
+      if (req.path.startsWith('/api')) {
+        return next();
+      }
+      try {
+        const templatePath = path.resolve(process.cwd(), "index.html");
+        if (fs.existsSync(templatePath)) {
+          let template = fs.readFileSync(templatePath, "utf-8");
+          template = await vite.transformIndexHtml(req.originalUrl, template);
+          return res.status(200).set({ "Content-Type": "text/html" }).end(template);
+        }
+        next();
+      } catch (e) {
+        vite.ssrFixStacktrace(e as Error);
+        next(e);
+      }
+    });
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));

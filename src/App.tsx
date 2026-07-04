@@ -2867,7 +2867,12 @@ const SettingsPage = ({ business, setBusiness, onLogout, showToast }: { business
 const isStorefrontSlug = (path: string): boolean => {
   if (!path) return false;
   if (path.includes('.')) return false;
-  const reserved = ['assets', 'api', 'dashboard', 'products', 'leads', 'followups', 'orders', 'reviews', 'settings', 'index.html', 'explore', 'store'];
+  const reserved = [
+    'assets', 'api', 'admin', 'dashboard', 'products', 'leads', 'followups', 
+    'orders', 'reviews', 'settings', 'index.html', 'explore', 'store', 
+    'storefront', 'verification', 'auth', 'signin', 'signup', 'www', 'app', 
+    'sales', 'support', 'mail', 'blog'
+  ];
   if (reserved.includes(path.toLowerCase())) return false;
   return /^[a-zA-Z0-9_\-]+$/.test(path);
 };
