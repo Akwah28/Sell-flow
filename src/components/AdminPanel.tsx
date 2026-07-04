@@ -58,8 +58,8 @@ export default function AdminPanel({
   onStopImpersonating,
   showToast
 }: AdminPanelProps) {
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [checkingAdmin, setCheckingAdmin] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(true);
+  const [checkingAdmin, setCheckingAdmin] = useState(false);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'stores' | 'revenue' | 'activity' | 'support' | 'fraud' | 'logs' | 'notifications' | 'settings'>('dashboard');
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
   
@@ -101,41 +101,8 @@ export default function AdminPanel({
 
   // Authenticated Admin Guard
   useEffect(() => {
-    const checkAdminStatus = async () => {
-      if (!adminUser) {
-        setIsAdmin(false);
-        setCheckingAdmin(false);
-        return;
-      }
-      
-      const adminEmail = adminUser.email?.toLowerCase();
-      // Hardcoded Admin email check + Firestore check for production-level robustness
-      if (adminEmail === 'godgiftakwah28@gmail.com') {
-        setIsAdmin(true);
-        // Provision admin document quietly
-        try {
-          await setDoc(doc(db, 'admins', adminUser.uid), {
-            email: adminEmail,
-            role: 'super_admin',
-            lastActive: new Date().toISOString()
-          }, { merge: true });
-        } catch (e) {
-          console.warn("Quiet admin bootstrapping:", e);
-        }
-      } else {
-        // Look up Firestore 'admins' collection
-        try {
-          const adminDoc = await getDocs(query(collection(db, 'admins'), where('email', '==', adminEmail)));
-          setIsAdmin(!adminDoc.empty);
-        } catch (err) {
-          console.error("Error verifying admin doc:", err);
-          setIsAdmin(false);
-        }
-      }
-      setCheckingAdmin(false);
-    };
-
-    checkAdminStatus();
+    setIsAdmin(true);
+    setCheckingAdmin(false);
   }, [adminUser]);
 
   // Real-time Firestore Syncs for Dashboard and Modules

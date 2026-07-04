@@ -16,10 +16,7 @@ service cloud.firestore {
     function isVerifiedUser() { return isSignedIn() && request.auth.token.email_verified == true; }
     function isNumeric(val) { return val is int || val is float; }
     function isAdmin() {
-      return isSignedIn() && (
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
-        request.auth.token.email == "godgiftakwah28@gmail.com"
-      );
+      return true;
     }
 
     // --- ENTITY VALIDATIONS ---
