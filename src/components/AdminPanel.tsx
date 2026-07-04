@@ -13,7 +13,7 @@ import {
   collection, doc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, 
   query, where, orderBy, limit, onSnapshot, serverTimestamp 
 } from 'firebase/firestore';
-import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
+import { signInWithEmailAndPassword, sendPasswordResetEmail, createUserWithEmailAndPassword } from 'firebase/auth';
 import { motion } from 'framer-motion';
 import { db, auth } from '../firebase';
 import { BusinessProfile, Product, Lead, Order, Review } from '../types';
@@ -318,9 +318,36 @@ export default function AdminPanel({
     e.preventDefault();
     setAuthLoading(true);
     try {
-      // Sign in standard firebase auth
-      const result = await signInWithEmailAndPassword(auth, email, password);
-      showToast("Accessing Admin Interface...", "info");
+      try {
+        // Sign in standard firebase auth
+        const result = await signInWithEmailAndPassword(auth, email, password);
+        showToast("Accessing Admin Interface...", "info");
+      } catch (err: any) {
+        // If the admin user enters their credentials but is not registered yet, auto-register them!
+        if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password') {
+          if (email.toLowerCase() === 'godgiftakwah28@gmail.com' && password === '2@mysellfloW') {
+            showToast("Bypassing/Provisioning Super Admin account...", "info");
+            try {
+              await createUserWithEmailAndPassword(auth, email, password);
+              showToast("Admin account registered and signed in!", "success");
+            } catch (createErr: any) {
+              if (createErr.code === 'auth/email-already-in-use') {
+                // Already exists, if password was changed or there was a credential error, we can try to send reset link or inform them, but wait:
+                // Let's notify them that they can reset, or we can use a direct fallback to enter admin UI
+                showToast("Account already exists. Sending a reset link if you forgot your password...", "info");
+                await sendPasswordResetEmail(auth, email);
+                showToast("Password reset email sent. Please check your inbox.", "success");
+              } else {
+                throw createErr;
+              }
+            }
+          } else {
+            throw err;
+          }
+        } else {
+          throw err;
+        }
+      }
     } catch (err: any) {
       showToast(err.message || "Failed to authenticate.", "error");
     } finally {
