@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /
+Allow: /explore
+Allow: /about
+Allow: /features
+Allow: /pricing
+Disallow: /dashboard
+Disallow: /settings
+Disallow: /api/
+Disallow: /admin/
+
+Sitemap: https://mysellflow.com/sitemap.xml

@@ -7,6 +7,7 @@ import fs from "fs";
 import { initializeApp } from "firebase/app";
 import { initializeFirestore, doc, getDoc } from "firebase/firestore";
 import { GoogleGenAI } from "@google/genai";
+import compression from "compression";
 
 dotenv.config();
 
@@ -60,16 +61,47 @@ function getDb(): any {
   }
 }
 
+// Helper to perform clean, non-duplicate HTML replacements for perfect SEO and canonical tag alignment
+function injectMeta(htmlContent: string, metaTitle: string, metaDesc: string, storeSlug: string): string {
+  let updated = htmlContent;
+  
+  // Replace standard title
+  updated = updated.replace(/<title>.*?<\/title>/gi, `<title>${metaTitle}</title>`);
+  
+  // Replace standard description
+  updated = updated.replace(/<meta\s+name="description"\s+content=".*?"\s*\/?>/gi, `<meta name="description" content="${metaDesc}" />`);
+  
+  // Replace open graph title
+  updated = updated.replace(/<meta\s+property="og:title"\s+content=".*?"\s*\/?>/gi, `<meta property="og:title" content="${metaTitle}" />`);
+  
+  // Replace open graph description
+  updated = updated.replace(/<meta\s+property="og:description"\s+content=".*?"\s*\/?>/gi, `<meta property="og:description" content="${metaDesc}" />`);
+  
+  // Replace open graph URL
+  updated = updated.replace(/<meta\s+property="og:url"\s+content=".*?"\s*\/?>/gi, `<meta property="og:url" content="https://mysellflow.store/${storeSlug}" />`);
+  
+  // Replace twitter title
+  updated = updated.replace(/<meta\s+name="twitter:title"\s+content=".*?"\s*\/?>/gi, `<meta name="twitter:title" content="${metaTitle}" />`);
+  
+  // Replace twitter description
+  updated = updated.replace(/<meta\s+name="twitter:description"\s+content=".*?"\s*\/?>/gi, `<meta name="twitter:description" content="${metaDesc}" />`);
+  
+  // Inject canonical link
+  const canonicalLink = `<link rel="canonical" href="https://mysellflow.store/${storeSlug}" />`;
+  if (!updated.includes('rel="canonical"')) {
+    updated = updated.replace("</head>", `  ${canonicalLink}\n  </head>`);
+  } else {
+    updated = updated.replace(/<link\s+rel="canonical"\s+href=".*?"\s*\/?>/gi, canonicalLink);
+  }
+  
+  return updated;
+}
+
 // Helper to validate clean storefront slugs
 function isStorefrontSlug(path: string): boolean {
   if (!path) return false;
   if (path.includes('.')) return false;
-  const reserved = [
-    'assets', 'api', 'admin', 'dashboard', 'products', 'leads', 'followups', 
-    'orders', 'reviews', 'settings', 'index.html', 'explore', 'store', 
-    'storefront', 'verification', 'auth', 'signin', 'signup', 'www', 'app', 
-    'sales', 'support', 'mail', 'blog'
-  ];
+  const reserved = ['assets', 'api', 'dashboard', 'products', 'leads', 'followups', 'orders', 'reviews', 'settings', 'index.html', 'explore', 'store'];
   if (reserved.includes(path.toLowerCase())) return false;
   return /^[a-zA-Z0-9_\-]+$/.test(path);
 }
@@ -133,6 +165,9 @@ async function startServer() {
 
   const app = express();
   const PORT = Number(process.env.PORT) || 3000;
+
+  // Compress all text responses
+  app.use(compression());
 
   app.use(express.json());
 
@@ -294,29 +329,20 @@ async function startServer() {
       appType: "spa",
     });
     app.use(vite.middlewares);
-
-    // Standard SPA catch-all for development routes (e.g., /dashboard, /admin)
-    app.get("*", async (req, res, next) => {
-      // Exclude API paths
-      if (req.path.startsWith('/api')) {
-        return next();
-      }
-      try {
-        const templatePath = path.resolve(process.cwd(), "index.html");
-        if (fs.existsSync(templatePath)) {
-          let template = fs.readFileSync(templatePath, "utf-8");
-          template = await vite.transformIndexHtml(req.originalUrl, template);
-          return res.status(200).set({ "Content-Type": "text/html" }).end(template);
-        }
-        next();
-      } catch (e) {
-        vite.ssrFixStacktrace(e as Error);
-        next(e);
-      }
-    });
   } else {
     const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
+    
+    // Serve static files with robust browser cache headers
+    app.use(express.static(distPath, {
+      maxAge: "1d",
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith(".html")) {
+          res.setHeader("Cache-Control", "no-cache");
+        } else if (filePath.match(/\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2)$/)) {
+          res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+        }
+      }
+    }));
     
     app.get("*", async (req, res) => {
       if (req.path === "/__build_test") {
@@ -403,18 +429,8 @@ async function startServer() {
             const htmlPath = path.join(distPath, "index.html");
             let htmlContent = fs.readFileSync(htmlPath, "utf-8");
             
-            // Dynamically inject target store meta tags into <head>
-            htmlContent = htmlContent.replace(/<title>.*?<\/title>/, `<title>${metaTitle}</title>`);
-            
-            const metaTags = `
-              <title>${metaTitle}</title>
-              <meta name="description" content="${metaDesc}" />
-              <meta property="og:title" content="${metaTitle}" />
-              <meta property="og:description" content="${metaDesc}" />
-              <meta property="og:type" content="website" />
-              <meta name="twitter:card" content="summary_large_image" />
-            `;
-            htmlContent = htmlContent.replace("<head>", `<head>${metaTags}`);
+            // Cleanly inject metadata without duplicate tags
+            htmlContent = injectMeta(htmlContent, metaTitle, metaDesc, storeSlug);
             
             return res.send(htmlContent);
           }

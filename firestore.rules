@@ -15,9 +15,6 @@ service cloud.firestore {
     function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
     function isVerifiedUser() { return isSignedIn() && request.auth.token.email_verified == true; }
     function isNumeric(val) { return val is int || val is float; }
-    function isAdmin() {
-      return true;
-    }
 
     // --- ENTITY VALIDATIONS ---
 
@@ -113,88 +110,64 @@ service cloud.firestore {
 
     match /slugs/{slug} {
       allow get, list: if true;
-      allow create, update: if (isSignedIn() && incoming().ownerId == request.auth.uid && isValidSlugMapping(incoming())) || isAdmin();
-      allow delete: if (isSignedIn() && existing().ownerId == request.auth.uid) || isAdmin();
+      allow create, update: if isSignedIn() && incoming().ownerId == request.auth.uid && isValidSlugMapping(incoming());
+      allow delete: if isSignedIn() && existing().ownerId == request.auth.uid;
     }
 
     match /businesses/{businessId} {
       allow read: if true; // Public for storefront and global explore discovery
-      allow create: if (isSignedIn() && request.auth.uid == businessId && isValidBusiness(incoming())) || isAdmin();
+      allow create: if isSignedIn() && request.auth.uid == businessId && isValidBusiness(incoming());
       allow update: if (isSignedIn() && request.auth.uid == businessId && isValidBusiness(incoming()) && incoming().ownerId == request.auth.uid)
         || (incoming().diff(existing()).affectedKeys().hasOnly(['views', 'clicksMessageMerchant', 'clicksWhatsAppOrder'])
             && (!incoming().diff(existing()).affectedKeys().hasAny(['views']) || incoming().views == existing().get('views', 0) + 1)
             && (!incoming().diff(existing()).affectedKeys().hasAny(['clicksMessageMerchant']) || incoming().get('clicksMessageMerchant', 0) == existing().get('clicksMessageMerchant', 0) + 1)
             && (!incoming().diff(existing()).affectedKeys().hasAny(['clicksWhatsAppOrder']) || incoming().get('clicksWhatsAppOrder', 0) == existing().get('clicksWhatsAppOrder', 0) + 1)
-           ) || isAdmin();
-      allow delete: if isAdmin(); 
+           );
+      allow delete: if false; 
     }
 
     match /products/{productId} {
       allow read: if true; 
-      allow create: if (isSignedIn() && isValidProduct(incoming())) || isAdmin();
-      allow update: if (isOwner(existing()) && isValidProduct(incoming()) && incoming().ownerId == existing().ownerId) || isAdmin();
-      allow delete: if isOwner(existing()) || isAdmin();
+      allow create: if isSignedIn() && isValidProduct(incoming());
+      allow update: if isOwner(existing()) && isValidProduct(incoming()) 
+        && incoming().ownerId == existing().ownerId;
+      allow delete: if isOwner(existing());
     }
 
     match /leads/{leadId} {
-      allow get: if isOwner(existing()) || isAdmin();
-      allow list: if (isSignedIn() && resource.data.ownerId == request.auth.uid) || isAdmin();
+      allow get: if isOwner(existing());
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
       allow create: if isValidLead(incoming()); // Allow public lead creation
-      allow update: if (isOwner(existing()) && isValidLead(incoming()) && incoming().ownerId == existing().ownerId) || isAdmin();
-      allow delete: if isOwner(existing()) || isAdmin();
+      allow update: if isOwner(existing()) && isValidLead(incoming()) 
+        && incoming().ownerId == existing().ownerId;
+      allow delete: if isOwner(existing());
     }
 
     match /orders/{orderId} {
-      allow get, list: if (isSignedIn() && resource.data.ownerId == request.auth.uid) || isAdmin();
-      allow create: if (isSignedIn() && isValidOrder(incoming())) || isAdmin();
-      allow update: if (isOwner(existing()) && isValidOrder(incoming()) && incoming().ownerId == existing().ownerId) || isAdmin();
-      allow delete: if isOwner(existing()) || isAdmin();
+      allow get, list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isSignedIn() && isValidOrder(incoming());
+      allow update: if isOwner(existing()) && isValidOrder(incoming())
+        && incoming().ownerId == existing().ownerId;
+      allow delete: if isOwner(existing());
     }
 
     match /reviews/{reviewId} {
       allow get, list: if true; // Reviews are public
-      allow create: if isValidReview(incoming()) || isAdmin();
-      allow update: if (isOwner(existing()) && isValidReview(incoming()) && incoming().ownerId == existing().ownerId) || isAdmin();
-      allow delete: if isOwner(existing()) || isAdmin();
+      allow create: if isValidReview(incoming());
+      allow update: if isOwner(existing()) && isValidReview(incoming())
+        && incoming().ownerId == existing().ownerId;
+      allow delete: if isOwner(existing());
     }
 
     match /platform_reviews/{reviewId} {
       allow read: if true; // Platform reviews are public
       allow create: if true; // Public reviews can be posted by guests
-      allow update, delete: if isAdmin();
+      allow update, delete: if false;
     }
 
     match /contact_messages/{messageId} {
       allow create: if isValidContactMessage(incoming());
-      allow read, update, delete: if isAdmin();
-    }
-
-    match /admins/{adminId} {
-      allow read, write: if isAdmin();
-    }
-
-    match /support_tickets/{ticketId} {
-      allow create: if true; // Anyone can open a support ticket
-      allow read, update, delete: if isAdmin() || (isSignedIn() && resource.data.email == request.auth.token.email);
-    }
-
-    match /fraud_alerts/{alertId} {
-      allow read, write: if isAdmin();
-    }
-
-    match /audit_logs/{logId} {
-      allow create, read: if isAdmin();
-      allow update, delete: if false; // Audit logs are immutable
-    }
-
-    match /platform_settings/{settingId} {
-      allow read: if true; // Everyone can read global settings
-      allow write: if isAdmin();
-    }
-
-    match /broadcasts/{broadcastId} {
-      allow read: if true; // Everyone can read platform announcements
-      allow write: if isAdmin();
+      allow read, update, delete: if false;
     }
   }
 }
