@@ -34,7 +34,10 @@ import {
   Settings,
   Search,
   Eye,
-  EyeOff
+  EyeOff,
+  Instagram,
+  Facebook,
+  MessageCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { db, OperationType, handleFirestoreError } from '../firebase';
@@ -146,6 +149,48 @@ export default function LandingPage({ onGetStarted, onLogin }: LandingPageProps)
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' as any });
+
+    // Dynamic SEO optimization for high-ranking Nigerian e-commerce search queries
+    const seoMeta: Record<string, { title: string; description: string }> = {
+      home: {
+        title: "MySellFlow | WhatsApp Storefront Builder & Sales Automation for Nigeria",
+        description: "Turn your WhatsApp chats into structured online sales. Create a custom shopping storefront, automate orders, track leads, schedule follow-ups, and get paid instantly. The #1 e-commerce software for merchants in Lagos, Abuja, and all across Nigeria."
+      },
+      about: {
+        title: "About MySellFlow | Who Built Mysellflow? Founded by Akwah Godgift",
+        description: "Discover the story behind MySellFlow, founded by Akwah Godgift. Our mission is to make online selling simple, affordable, and accessible for social commerce entrepreneurs in Nigeria."
+      },
+      features: {
+        title: "MySellFlow Features | Storefront Generator, Order Tracking & Inventory",
+        description: "Explore features designed for high-hustle Nigerian vendors: custom store URLs, automated stock levels, WhatsApp invoice receipts, customer CRM tracking, and powerful business insights."
+      },
+      pricing: {
+        title: "MySellFlow Pricing | Free Tier & Professional Sales Automation Plans",
+        description: "Get started free with MySellFlow. Create your online store link, list products, and receive automated WhatsApp orders with zero upfront setup fees. Tailored plans for growing brands."
+      },
+      contact: {
+        title: "Contact MySellFlow Support | Lagos, Abuja & Nigeria E-Commerce Support",
+        description: "Need help setting up your online storefront? Get in touch with the MySellFlow support desk. Email us directly or submit an online inquiry. Fast replies for business owners."
+      }
+    };
+
+    const currentSeo = seoMeta[currentPage] || seoMeta.home;
+    document.title = currentSeo.title;
+    
+    const metaDescription = document.querySelector('meta[name="description"]');
+    if (metaDescription) {
+      metaDescription.setAttribute('content', currentSeo.description);
+    }
+
+    const ogTitle = document.querySelector('meta[property="og:title"]');
+    if (ogTitle) {
+      ogTitle.setAttribute('content', currentSeo.title);
+    }
+
+    const ogDescription = document.querySelector('meta[property="og:description"]');
+    if (ogDescription) {
+      ogDescription.setAttribute('content', currentSeo.description);
+    }
   }, [currentPage]);
 
   // States for interactive mockup preview screens
@@ -547,6 +592,71 @@ export default function LandingPage({ onGetStarted, onLogin }: LandingPageProps)
               <p className="text-purple-100 text-xs sm:text-sm leading-relaxed max-w-2xl font-semibold">
                 Our mission is simple: to make professional online selling accessible to anyone with a smartphone. You don't need coding skills, custom domains, or excessive setup costs. We give you enterprise-grade store management directly from your phone.
               </p>
+            </div>
+          </div>
+
+          {/* Founder Section */}
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-10 items-center border-t border-[#EDE8FB] pt-12">
+            <div className="md:col-span-4 flex flex-col items-center md:items-start space-y-4 text-center md:text-left">
+              <div className="relative w-32 h-32 rounded-3xl bg-gradient-to-tr from-[#5B2FD4] to-pink-500 p-1 shadow-lg shadow-[#5B2FD4]/10">
+                <div className="w-full h-full rounded-2xl bg-slate-900 flex flex-col items-center justify-center text-white relative overflow-hidden">
+                  <span className="font-sans font-black text-3xl tracking-tighter italic">AG</span>
+                  <div className="absolute bottom-2 inset-x-0 text-[9px] font-black tracking-widest uppercase text-purple-300 text-center">Founder</div>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <h4 className="font-sans font-bold text-lg text-slate-900 tracking-tight leading-none">Akwah Godgift</h4>
+                <p className="text-[10px] font-black text-[#5B2FD4] uppercase tracking-widest leading-none">Founder & Creator</p>
+              </div>
+              <div className="flex items-center gap-2.5 pt-1">
+                <a 
+                  href="https://www.instagram.com/godgiftakwah?igsh=MjY0bDRyN2N6MDg1" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="w-8 h-8 rounded-xl bg-[#EDE8FB]/60 text-[#5B2FD4] hover:bg-[#5B2FD4] hover:text-white flex items-center justify-center transition-all duration-200 shadow-sm border border-[#EDE8FB]"
+                  title="Follow on Instagram"
+                >
+                  <Instagram size={15} />
+                </a>
+                <a 
+                  href="https://www.facebook.com/profile.php?id=61581578297704" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="w-8 h-8 rounded-xl bg-[#EDE8FB]/60 text-[#5B2FD4] hover:bg-[#5B2FD4] hover:text-white flex items-center justify-center transition-all duration-200 shadow-sm border border-[#EDE8FB]"
+                  title="Connect on Facebook"
+                >
+                  <Facebook size={15} />
+                </a>
+                <a 
+                  href="https://wa.me/2349061439327?text=Hello%20Akwah%20Godgift,%20I'm%20interested%20in%20learning%20more%20about%20MySellFlow%20and%20social%20commerce%20in%20Nigeria!" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="w-8 h-8 rounded-xl bg-[#EDE8FB]/60 text-[#5B2FD4] hover:bg-[#5B2FD4] hover:text-white flex items-center justify-center transition-all duration-200 shadow-sm border border-[#EDE8FB]"
+                  title="Chat on WhatsApp"
+                >
+                  <MessageCircle size={15} />
+                </a>
+              </div>
+            </div>
+            
+            <div className="md:col-span-8 space-y-5">
+              <span className="text-[10px] font-black text-[#5B2FD4] uppercase tracking-widest bg-[#EDE8FB]/60 px-2.5 py-1 rounded-full inline-block">Founder Story</span>
+              <h3 className="font-sans font-black text-2xl sm:text-3xl text-[#111827] tracking-tight uppercase italic leading-none">Who Built Mysellflow?</h3>
+              <p className="text-slate-600 text-xs sm:text-sm leading-relaxed font-semibold">
+                Mysellflow was founded by <strong>Akwah Godgift</strong>, an entrepreneur passionate about helping small businesses succeed in the digital economy.
+              </p>
+              <p className="text-slate-600 text-xs sm:text-sm leading-relaxed font-semibold">
+                After seeing how many vendors relied on WhatsApp and social media to sell—often sending product photos one by one and struggling to present their businesses professionally—he set out to build a simpler solution.
+              </p>
+              <p className="text-slate-600 text-xs sm:text-sm leading-relaxed font-semibold">
+                Mysellflow was created to give every business, regardless of size, the ability to launch a professional online store in minutes, manage products with ease, and share a single store link with customers.
+              </p>
+              <div className="bg-[#FFF7ED] border border-[#F97316]/15 rounded-2xl p-4 space-y-1">
+                <span className="text-[9px] font-black text-[#F97316] uppercase tracking-widest">DRIVEN BY ONE MISSION</span>
+                <p className="text-xs sm:text-sm font-black text-[#F97316] italic leading-tight">
+                  "To make online selling simple, affordable, and accessible for every entrepreneur."
+                </p>
+              </div>
             </div>
           </div>
 

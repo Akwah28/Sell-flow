@@ -49,6 +49,7 @@ import { motion, AnimatePresence, animate } from 'framer-motion';
 import LandingPage from './components/LandingPage';
 import ExplorePage from './components/ExplorePage';
 import { OnboardingFlow, SetupChecklistCard } from './components/OnboardingFlow';
+import { CookieConsent } from './components/CookieConsent';
 import { 
   BarChart, 
   Bar, 
@@ -6307,6 +6308,9 @@ export default function App() {
 
       {/* Render Toast Notifications */}
       <ToastContainer toasts={toasts} onClose={(id) => setToasts(prev => prev.filter(t => t.id !== id))} />
+
+      {/* Global GDPR & NDPR Compliant Cookie Consent Banner */}
+      <CookieConsent />
     </div>
   );
 }
