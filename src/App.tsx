@@ -5182,6 +5182,32 @@ export default function App() {
 
   // Global Website Visitor View Tracker (session-based to prevent duplication)
   useEffect(() => {
+    // Determine if this is an Admin Dashboard visitor to prevent self-counting or counting admin views
+    const host = window.location.hostname.toLowerCase().trim();
+    const hostWithoutPort = host.split(':')[0];
+    const urlParams = new URLSearchParams(window.location.search);
+    const path = window.location.pathname.toLowerCase().trim();
+    const cleanPath = path.replace(/^\/+|\/+$/g, '');
+
+    const isHostAdmin = hostWithoutPort === 'admindashboard.mysellflow.store' ||
+                        hostWithoutPort === 'admindashboard' ||
+                        hostWithoutPort.startsWith('admindashboard.') ||
+                        urlParams.get('admin') === 'true' ||
+                        window.location.hash === '#admin' ||
+                        path === '/admin' ||
+                        path.startsWith('/admin/') ||
+                        path === '/admindashboard' ||
+                        path.startsWith('/admindashboard/') ||
+                        cleanPath === 'admin' ||
+                        cleanPath.startsWith('admin/') ||
+                        cleanPath === 'admindashboard' ||
+                        cleanPath.startsWith('admindashboard/');
+
+    if (isHostAdmin) {
+      console.log("Admin Dashboard view detected. Skipping global website visitor tracking.");
+      return;
+    }
+
     const platformSessionKey = 'platform_visited';
     if (!sessionStorage.getItem(platformSessionKey)) {
       sessionStorage.setItem(platformSessionKey, 'true');
