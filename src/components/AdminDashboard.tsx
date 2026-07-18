@@ -25,7 +25,8 @@ import {
   MessageCircle,
   Star,
   Check,
-  X
+  X,
+  Compass
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -329,6 +330,7 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('analytics');
   const [currentTime, setCurrentTime] = useState(new Date());
   const [platformViews, setPlatformViews] = useState<number>(0);
+  const [landingViews, setLandingViews] = useState<number>(0);
 
   // Fix body background bleed on scroll for Dark-themed Admin Dashboard
   useEffect(() => {
@@ -439,6 +441,18 @@ export default function AdminDashboard() {
       }
       setPlatformViews(platViews);
 
+      // Fetch landing page platform views
+      let landViews = 0;
+      try {
+        const landSnap = await getDoc(doc(db, 'platform_stats', 'landing'));
+        if (landSnap.exists()) {
+          landViews = Number(landSnap.data().views) || 0;
+        }
+      } catch (err) {
+        console.warn("Platform landing stats query failed:", err);
+      }
+      setLandingViews(landViews);
+
       setSystemLogs(prev => [
         { time: new Date().toLocaleTimeString(), level: 'SUCCESS', msg: `Successfully fetched database payload: ${bizList.length} stores, ${prodList.length} items, ${revList.length} reviews, ${leadsList.length} leads.` },
         ...prev
@@ -498,6 +512,8 @@ export default function AdminDashboard() {
   const totalProducts = displayedProducts.length;
   const totalReviews = displayedReviews.length;
   const displayedPlatformViews = sandboxEnabled ? (platformViews + 15420) : platformViews;
+  const displayedLandingViews = sandboxEnabled ? (landingViews + 12840) : landingViews;
+  const displayedTotalViews = displayedPlatformViews + displayedLandingViews;
 
   // Calculate engagement rates
   const totalClicksMerchant = displayedBusinesses.reduce((acc, curr) => acc + (Number(curr.clicksMessageMerchant) || 0), 0);
@@ -1029,8 +1045,8 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          {/* 4 Main Important Icons & Core Metrics Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {/* 5 Main Important Icons & Core Metrics Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
             
             {/* Metric Card 1: Total App Users */}
             <div id="admin-users-card" className="relative group bg-slate-900/40 border border-slate-800 hover:border-purple-500/40 p-6 rounded-2xl transition-all duration-300 hover:shadow-[0_0_30px_rgba(168,85,247,0.05)] overflow-hidden">
@@ -1053,13 +1069,33 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            {/* Metric Card 2: Total Storefront Visitor Views */}
-            <div id="admin-views-card" className="relative group bg-slate-900/40 border border-slate-800 hover:border-sky-500/40 p-6 rounded-2xl transition-all duration-300 hover:shadow-[0_0_30px_rgba(14,165,233,0.05)] overflow-hidden">
+            {/* Metric Card 2: Landing Page Views */}
+            <div id="admin-landing-views-card" className="relative group bg-slate-900/40 border border-slate-800 hover:border-amber-500/40 p-6 rounded-2xl transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.05)] overflow-hidden">
+              <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-amber-500 to-rose-500" />
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-slate-400 font-extrabold text-xs uppercase tracking-widest">Landing Page Views</p>
+                  <p className="text-4xl font-black text-white mt-3 tracking-tighter font-mono">{displayedLandingViews}</p>
+                </div>
+                <div className="p-3.5 bg-amber-500/10 rounded-xl border border-amber-500/20 text-amber-400 group-hover:scale-110 transition-transform duration-300">
+                  <Compass size={24} className="stroke-[2.5]" />
+                </div>
+              </div>
+              <div className="mt-4 pt-4 border-t border-slate-800/60 flex items-center justify-between text-xs">
+                <span className="text-slate-500 font-semibold">Platform Home Visits</span>
+                <span className="text-amber-400 font-bold flex items-center gap-1 font-mono">
+                  Core Ingress
+                </span>
+              </div>
+            </div>
+
+            {/* Metric Card 3: Global Storefront Views */}
+            <div id="admin-global-views-card" className="relative group bg-slate-900/40 border border-slate-800 hover:border-sky-500/40 p-6 rounded-2xl transition-all duration-300 hover:shadow-[0_0_30px_rgba(14,165,233,0.05)] overflow-hidden">
               <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-sky-500 to-indigo-500" />
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="text-slate-400 font-extrabold text-xs uppercase tracking-widest">Total Storefront Views</p>
-                  <p className="text-4xl font-black text-white mt-3 tracking-tighter font-mono">{totalViews}</p>
+                  <p className="text-slate-400 font-extrabold text-xs uppercase tracking-widest">Global Storefront Views</p>
+                  <p className="text-4xl font-black text-white mt-3 tracking-tighter font-mono">{displayedPlatformViews}</p>
                 </div>
                 <div className="p-3.5 bg-sky-500/10 rounded-xl border border-sky-500/20 text-sky-400 group-hover:scale-110 transition-transform duration-300">
                   <Eye size={24} className="stroke-[2.5]" />
@@ -1067,33 +1103,33 @@ export default function AdminDashboard() {
               </div>
               <div className="mt-4 pt-4 border-t border-slate-800/60 flex items-center justify-between text-xs">
                 <span className="text-slate-500 font-semibold">Aggregate Store Traffic</span>
-                <span className="text-indigo-400 font-bold flex items-center gap-1 font-mono">
-                  Direct Merchant Visits
+                <span className="text-sky-400 font-bold flex items-center gap-1 font-mono">
+                  All Merchant Shops
                 </span>
               </div>
             </div>
 
-            {/* Metric Card 3: Total Website Visitor Views */}
-            <div id="admin-website-views-card" className="relative group bg-slate-900/40 border border-slate-800 hover:border-emerald-500/40 p-6 rounded-2xl transition-all duration-300 hover:shadow-[0_0_30px_rgba(16,185,129,0.05)] overflow-hidden">
+            {/* Metric Card 4: Total Website Views */}
+            <div id="admin-total-views-card" className="relative group bg-slate-900/40 border border-slate-800 hover:border-emerald-500/40 p-6 rounded-2xl transition-all duration-300 hover:shadow-[0_0_30px_rgba(16,185,129,0.05)] overflow-hidden">
               <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-emerald-500 to-teal-500" />
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-slate-400 font-extrabold text-xs uppercase tracking-widest">Total Website Views</p>
-                  <p className="text-4xl font-black text-white mt-3 tracking-tighter font-mono">{displayedPlatformViews}</p>
+                  <p className="text-4xl font-black text-white mt-3 tracking-tighter font-mono">{displayedTotalViews}</p>
                 </div>
                 <div className="p-3.5 bg-emerald-500/10 rounded-xl border border-emerald-500/20 text-emerald-400 group-hover:scale-110 transition-transform duration-300">
                   <Globe size={24} className="stroke-[2.5]" />
                 </div>
               </div>
               <div className="mt-4 pt-4 border-t border-slate-800/60 flex items-center justify-between text-xs">
-                <span className="text-slate-500 font-semibold">Total Website Visitor Views</span>
+                <span className="text-slate-500 font-semibold">Total Combined Views</span>
                 <span className="text-teal-400 font-bold flex items-center gap-1 font-mono">
-                  Live Traffic Stream
+                  Entire Traffic Stream
                 </span>
               </div>
             </div>
 
-            {/* Metric Card 4: Total Published Products */}
+            {/* Metric Card 5: Total Published Products */}
             <div id="admin-products-card" className="relative group bg-slate-900/40 border border-slate-800 hover:border-indigo-500/40 p-6 rounded-2xl transition-all duration-300 hover:shadow-[0_0_30px_rgba(99,102,241,0.05)] overflow-hidden">
               <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-indigo-500 to-purple-500" />
               <div className="flex items-start justify-between">

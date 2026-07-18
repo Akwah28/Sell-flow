@@ -5180,47 +5180,6 @@ export default function App() {
     };
   }, []);
 
-  // Global Website Visitor View Tracker (session-based to prevent duplication)
-  useEffect(() => {
-    // Determine if this is an Admin Dashboard visitor to prevent self-counting or counting admin views
-    const host = window.location.hostname.toLowerCase().trim();
-    const hostWithoutPort = host.split(':')[0];
-    const urlParams = new URLSearchParams(window.location.search);
-    const path = window.location.pathname.toLowerCase().trim();
-    const cleanPath = path.replace(/^\/+|\/+$/g, '');
-
-    const isHostAdmin = hostWithoutPort === 'admindashboard.mysellflow.store' ||
-                        hostWithoutPort === 'admindashboard' ||
-                        hostWithoutPort.startsWith('admindashboard.') ||
-                        urlParams.get('admin') === 'true' ||
-                        window.location.hash === '#admin' ||
-                        path === '/admin' ||
-                        path.startsWith('/admin/') ||
-                        path === '/admindashboard' ||
-                        path.startsWith('/admindashboard/') ||
-                        cleanPath === 'admin' ||
-                        cleanPath.startsWith('admin/') ||
-                        cleanPath === 'admindashboard' ||
-                        cleanPath.startsWith('admindashboard/');
-
-    if (isHostAdmin) {
-      console.log("Admin Dashboard view detected. Skipping global website visitor tracking.");
-      return;
-    }
-
-    const platformSessionKey = 'platform_visited';
-    if (!sessionStorage.getItem(platformSessionKey)) {
-      sessionStorage.setItem(platformSessionKey, 'true');
-      setDoc(doc(db, 'platform_stats', 'global'), {
-        views: increment(1)
-      }, { merge: true }).then(() => {
-        console.log("Successfully recorded global platform website visitor view.");
-      }).catch((err) => {
-        console.error("Failed to record global platform view:", err);
-      });
-    }
-  }, []);
-
   // Routing State Manager
   const [currentPath, setCurrentPath] = useState(() => {
     return window.location.pathname.replace(/^\/+|\/+$/g, '').toLowerCase().trim();
@@ -5265,6 +5224,69 @@ export default function App() {
       window.removeEventListener('pushstate_changed', handleLocationChange);
     };
   }, []);
+
+  // Global Website Visitor View Tracker (session-based, separating landing page and storefront views)
+  useEffect(() => {
+    // Determine if this is an Admin Dashboard visitor to prevent self-counting or counting admin views
+    const host = window.location.hostname.toLowerCase().trim();
+    const hostWithoutPort = host.split(':')[0];
+    const urlParams = new URLSearchParams(window.location.search);
+    const path = window.location.pathname.toLowerCase().trim();
+    const cleanPath = path.replace(/^\/+|\/+$/g, '');
+
+    const isHostAdmin = hostWithoutPort === 'admindashboard.mysellflow.store' ||
+                        hostWithoutPort === 'admindashboard' ||
+                        hostWithoutPort.startsWith('admindashboard.') ||
+                        urlParams.get('admin') === 'true' ||
+                        window.location.hash === '#admin' ||
+                        path === '/admin' ||
+                        path.startsWith('/admin/') ||
+                        path === '/admindashboard' ||
+                        path.startsWith('/admindashboard/') ||
+                        cleanPath === 'admin' ||
+                        cleanPath.startsWith('admin/') ||
+                        cleanPath === 'admindashboard' ||
+                        cleanPath.startsWith('admindashboard/');
+
+    if (isHostAdmin) {
+      console.log("Admin Dashboard view detected. Skipping platform website visitor tracking.");
+      return;
+    }
+
+    // Resolve storefront slug to differentiate storefront traffic from platform landing traffic
+    const isStorefront = resolveStorefrontSlug() !== null;
+
+    if (isStorefront) {
+      // 1. Storefront Global Visitor Tracking
+      const storefrontSessionKey = 'storefront_global_visited';
+      if (!sessionStorage.getItem(storefrontSessionKey)) {
+        sessionStorage.setItem(storefrontSessionKey, 'true');
+        setDoc(doc(db, 'platform_stats', 'global'), {
+          views: increment(1)
+        }, { merge: true }).then(() => {
+          console.log("Successfully recorded global storefront website visitor view.");
+        }).catch((err) => {
+          console.error("Failed to record global storefront view:", err);
+        });
+      }
+    } else {
+      // 2. Landing Page Visitor Tracking
+      const isLanding = cleanPath === '' || cleanPath === 'explore' || cleanPath.startsWith('explore/');
+      if (isLanding) {
+        const landingSessionKey = 'landing_visited';
+        if (!sessionStorage.getItem(landingSessionKey)) {
+          sessionStorage.setItem(landingSessionKey, 'true');
+          setDoc(doc(db, 'platform_stats', 'landing'), {
+            views: increment(1)
+          }, { merge: true }).then(() => {
+            console.log("Successfully recorded landing page website visitor view.");
+          }).catch((err) => {
+            console.error("Failed to record landing page view:", err);
+          });
+        }
+      }
+    }
+  }, [currentPath]);
 
   const pushRoute = (path: string) => {
     const cleanPath = path.startsWith('/') ? path : `/${path}`;
