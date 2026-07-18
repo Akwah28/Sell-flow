@@ -106,6 +106,11 @@ service cloud.firestore {
         && (!data.keys().hasAll(['businessType']) || (data.businessType is string && data.businessType.size() <= 200));
     }
 
+    function isValidPlatformStats(data) {
+      return data.keys().hasAll(['views'])
+        && isNumeric(data.views) && data.views >= 0;
+    }
+
     // --- COLLECTIONS ---
 
     match /slugs/{slug} {
@@ -168,6 +173,14 @@ service cloud.firestore {
     match /contact_messages/{messageId} {
       allow create: if isValidContactMessage(incoming());
       allow read, update, delete: if false;
+    }
+
+    match /platform_stats/{statsId} {
+      allow get: if true;
+      allow create: if true;
+      allow update: if (isValidPlatformStats(incoming()) && incoming().diff(existing()).affectedKeys().hasOnly(['views'])
+            && incoming().views == existing().get('views', 0) + 1);
+      allow delete, list: if false;
     }
   }
 }

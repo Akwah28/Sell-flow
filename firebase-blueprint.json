@@ -124,9 +124,22 @@
         "createdAt": { "type": "string" }
       },
       "required": ["name", "email", "message", "createdAt"]
+    },
+    "PlatformStats": {
+      "title": "Platform Statistics",
+      "description": "Global statistics tracking platform-wide engagement metrics",
+      "type": "object",
+      "properties": {
+        "views": { "type": "number" }
+      },
+      "required": ["views"]
     }
   },
   "firestore": {
+    "/platform_stats/{statsId}": {
+      "schema": "PlatformStats",
+      "description": "Global platform statistics tracking views"
+    },
     "/slugs/{slug}": {
       "schema": "SlugMapping",
       "description": "Mapping from storefront slug to business owner UID"

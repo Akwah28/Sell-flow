@@ -46,6 +46,7 @@ import {
   collection, 
   getDocs, 
   doc, 
+  getDoc,
   updateDoc, 
   deleteDoc, 
   query, 
@@ -327,6 +328,20 @@ export default function AdminDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<TabType>('analytics');
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [platformViews, setPlatformViews] = useState<number>(0);
+
+  // Fix body background bleed on scroll for Dark-themed Admin Dashboard
+  useEffect(() => {
+    const originalClassName = document.body.className;
+    
+    // Apply slate dark background class to prevent white background scroll glitch
+    document.body.classList.add('bg-slate-950', 'text-slate-100');
+    document.body.classList.remove('bg-white', 'text-dark-text');
+    
+    return () => {
+      document.body.className = originalClassName;
+    };
+  }, []);
 
   // Interactive Sandbox Mode Toggle
   const [sandboxEnabled, setSandboxEnabled] = useState(true);
@@ -412,6 +427,18 @@ export default function AdminDashboard() {
       }
       setOrders(ordersList);
 
+      // Fetch global platform views
+      let platViews = 0;
+      try {
+        const platSnap = await getDoc(doc(db, 'platform_stats', 'global'));
+        if (platSnap.exists()) {
+          platViews = Number(platSnap.data().views) || 0;
+        }
+      } catch (err) {
+        console.warn("Platform global stats query failed:", err);
+      }
+      setPlatformViews(platViews);
+
       setSystemLogs(prev => [
         { time: new Date().toLocaleTimeString(), level: 'SUCCESS', msg: `Successfully fetched database payload: ${bizList.length} stores, ${prodList.length} items, ${revList.length} reviews, ${leadsList.length} leads.` },
         ...prev
@@ -470,6 +497,7 @@ export default function AdminDashboard() {
   const totalViews = displayedBusinesses.reduce((acc, curr) => acc + (Number(curr.views) || 0), 0);
   const totalProducts = displayedProducts.length;
   const totalReviews = displayedReviews.length;
+  const displayedPlatformViews = sandboxEnabled ? (platformViews + 15420) : platformViews;
 
   // Calculate engagement rates
   const totalClicksMerchant = displayedBusinesses.reduce((acc, curr) => acc + (Number(curr.clicksMessageMerchant) || 0), 0);
@@ -802,7 +830,7 @@ export default function AdminDashboard() {
       </AnimatePresence>
 
       {/* Top Banner & Title Area */}
-      <div className="bg-slate-900/40 border-b border-slate-800/80 sticky top-0 z-40 backdrop-blur-xl">
+      <div className="bg-slate-950/80 border-b border-slate-800/60 sticky top-0 z-40 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 md:px-8 py-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div className="flex items-center gap-3.5">
             <div className="w-11 h-11 bg-gradient-to-tr from-purple-600 via-indigo-600 to-sky-500 rounded-2xl flex items-center justify-center shadow-lg shadow-purple-500/15 ring-2 ring-purple-500/20">
@@ -1001,8 +1029,8 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          {/* 3 Main Important Icons & Core Metrics Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* 4 Main Important Icons & Core Metrics Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             
             {/* Metric Card 1: Total App Users */}
             <div id="admin-users-card" className="relative group bg-slate-900/40 border border-slate-800 hover:border-purple-500/40 p-6 rounded-2xl transition-all duration-300 hover:shadow-[0_0_30px_rgba(168,85,247,0.05)] overflow-hidden">
@@ -1038,14 +1066,34 @@ export default function AdminDashboard() {
                 </div>
               </div>
               <div className="mt-4 pt-4 border-t border-slate-800/60 flex items-center justify-between text-xs">
-                <span className="text-slate-500 font-semibold">Total Website Visitor Views</span>
+                <span className="text-slate-500 font-semibold">Aggregate Store Traffic</span>
                 <span className="text-indigo-400 font-bold flex items-center gap-1 font-mono">
+                  Direct Merchant Visits
+                </span>
+              </div>
+            </div>
+
+            {/* Metric Card 3: Total Website Visitor Views */}
+            <div id="admin-website-views-card" className="relative group bg-slate-900/40 border border-slate-800 hover:border-emerald-500/40 p-6 rounded-2xl transition-all duration-300 hover:shadow-[0_0_30px_rgba(16,185,129,0.05)] overflow-hidden">
+              <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-emerald-500 to-teal-500" />
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-slate-400 font-extrabold text-xs uppercase tracking-widest">Total Website Views</p>
+                  <p className="text-4xl font-black text-white mt-3 tracking-tighter font-mono">{displayedPlatformViews}</p>
+                </div>
+                <div className="p-3.5 bg-emerald-500/10 rounded-xl border border-emerald-500/20 text-emerald-400 group-hover:scale-110 transition-transform duration-300">
+                  <Globe size={24} className="stroke-[2.5]" />
+                </div>
+              </div>
+              <div className="mt-4 pt-4 border-t border-slate-800/60 flex items-center justify-between text-xs">
+                <span className="text-slate-500 font-semibold">Total Website Visitor Views</span>
+                <span className="text-teal-400 font-bold flex items-center gap-1 font-mono">
                   Live Traffic Stream
                 </span>
               </div>
             </div>
 
-            {/* Metric Card 3: Total Published Products */}
+            {/* Metric Card 4: Total Published Products */}
             <div id="admin-products-card" className="relative group bg-slate-900/40 border border-slate-800 hover:border-indigo-500/40 p-6 rounded-2xl transition-all duration-300 hover:shadow-[0_0_30px_rgba(99,102,241,0.05)] overflow-hidden">
               <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-indigo-500 to-purple-500" />
               <div className="flex items-start justify-between">
@@ -1129,10 +1177,10 @@ export default function AdminDashboard() {
               animate={{ opacity: 1, y: 0 }}
               className="space-y-8"
             >
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 min-w-0">
                 
                 {/* Traffic Views & Engagement Performance */}
-                <div className="bg-slate-900/30 border border-slate-800 p-6 rounded-2xl space-y-4">
+                <div className="bg-slate-900/30 border border-slate-800 p-6 rounded-2xl space-y-4 min-w-0">
                   <div>
                     <h3 className="text-sm font-black uppercase tracking-widest text-slate-200">Storefront Traffic views & Inquiries</h3>
                     <p className="text-[10px] text-slate-500 uppercase font-bold">Comparison of visitors views and WhatsApp leads by seller</p>
@@ -1166,7 +1214,7 @@ export default function AdminDashboard() {
                 </div>
 
                 {/* Inventory Distribution Density */}
-                <div className="bg-slate-900/30 border border-slate-800 p-6 rounded-2xl space-y-4">
+                <div className="bg-slate-900/30 border border-slate-800 p-6 rounded-2xl space-y-4 min-w-0">
                   <div>
                     <h3 className="text-sm font-black uppercase tracking-widest text-slate-200">Catalog Density Distribution</h3>
                     <p className="text-[10px] text-slate-500 uppercase font-bold">Total number of published active product listings</p>

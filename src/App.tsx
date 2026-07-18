@@ -2868,7 +2868,7 @@ const SettingsPage = ({ business, setBusiness, onLogout, showToast }: { business
 const isStorefrontSlug = (path: string): boolean => {
   if (!path) return false;
   if (path.includes('.')) return false;
-  const reserved = ['assets', 'api', 'dashboard', 'products', 'leads', 'followups', 'orders', 'reviews', 'settings', 'index.html', 'explore', 'store'];
+  const reserved = ['assets', 'api', 'dashboard', 'products', 'leads', 'followups', 'orders', 'reviews', 'settings', 'index.html', 'explore', 'store', 'admindashboard'];
   if (reserved.includes(path.toLowerCase())) return false;
   return /^[a-zA-Z0-9_\-]+$/.test(path);
 };
@@ -2930,7 +2930,7 @@ const resolveStorefrontSlug = (): string | null => {
   const firstPathSegment = pathname.split('/')[0];
   const reservedPaths = [
     'www', 'admin', 'api', 'app', 'sales', 'dashboard', 'support', 'mail', 'blog', 'localhost',
-    'explore', 'settings', 'signin', 'signup', 'orders', 'leads', 'products', 'reviews', 'followups', 'store', 'verification', 'auth', ''
+    'explore', 'settings', 'signin', 'signup', 'orders', 'leads', 'products', 'reviews', 'followups', 'store', 'verification', 'auth', 'admindashboard', ''
   ];
   if (!reservedPaths.includes(firstPathSegment) && isStorefrontSlug(firstPathSegment)) {
     return firstPathSegment;
@@ -5180,6 +5180,21 @@ export default function App() {
     };
   }, []);
 
+  // Global Website Visitor View Tracker (session-based to prevent duplication)
+  useEffect(() => {
+    const platformSessionKey = 'platform_visited';
+    if (!sessionStorage.getItem(platformSessionKey)) {
+      sessionStorage.setItem(platformSessionKey, 'true');
+      setDoc(doc(db, 'platform_stats', 'global'), {
+        views: increment(1)
+      }, { merge: true }).then(() => {
+        console.log("Successfully recorded global platform website visitor view.");
+      }).catch((err) => {
+        console.error("Failed to record global platform view:", err);
+      });
+    }
+  }, []);
+
   // Routing State Manager
   const [currentPath, setCurrentPath] = useState(() => {
     return window.location.pathname.replace(/^\/+|\/+$/g, '').toLowerCase().trim();
@@ -6075,11 +6090,18 @@ export default function App() {
   const hostWithoutPort = host.split(':')[0];
   const urlParams = new URLSearchParams(window.location.search);
   const isHostAdmin = hostWithoutPort === 'admindashboard.mysellflow.store' ||
+                      hostWithoutPort === 'admindashboard' ||
                       hostWithoutPort.startsWith('admindashboard.') ||
                       urlParams.get('admin') === 'true' ||
                       window.location.hash === '#admin' ||
                       window.location.pathname === '/admin' ||
-                      window.location.pathname.startsWith('/admin/');
+                      window.location.pathname.startsWith('/admin/') ||
+                      window.location.pathname === '/admindashboard' ||
+                      window.location.pathname.startsWith('/admindashboard/') ||
+                      currentPath === 'admin' ||
+                      currentPath.startsWith('admin/') ||
+                      currentPath === 'admindashboard' ||
+                      currentPath.startsWith('admindashboard/');
 
   if (isHostAdmin) {
     return <AdminDashboard />;
