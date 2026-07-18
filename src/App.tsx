@@ -50,6 +50,7 @@ import LandingPage from './components/LandingPage';
 import ExplorePage from './components/ExplorePage';
 import { OnboardingFlow, SetupChecklistCard } from './components/OnboardingFlow';
 import { CookieConsent } from './components/CookieConsent';
+import AdminDashboard from './components/AdminDashboard';
 import { 
   BarChart, 
   Bar, 
@@ -6067,6 +6068,21 @@ export default function App() {
         </div>
       </div>
     );
+  }
+
+  // Admin Dashboard Check (passwordless access as requested)
+  const host = window.location.hostname.toLowerCase().trim();
+  const hostWithoutPort = host.split(':')[0];
+  const urlParams = new URLSearchParams(window.location.search);
+  const isHostAdmin = hostWithoutPort === 'admindashboard.mysellflow.store' ||
+                      hostWithoutPort.startsWith('admindashboard.') ||
+                      urlParams.get('admin') === 'true' ||
+                      window.location.hash === '#admin' ||
+                      window.location.pathname === '/admin' ||
+                      window.location.pathname.startsWith('/admin/');
+
+  if (isHostAdmin) {
+    return <AdminDashboard />;
   }
 
   if (!user) {
