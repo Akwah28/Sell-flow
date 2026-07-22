@@ -4749,6 +4749,8 @@ const AuthScreen = ({
       const credential = await createUserWithEmailAndPassword(auth, email, password);
       await sendEmailVerification(credential.user);
       if (showToast) showToast("Registration complete! A verification message is sent to your email.", "success");
+      window.history.pushState(null, '', '/verification');
+      window.dispatchEvent(new Event('pushstate_changed'));
     } catch (error: any) {
       handleFailedAttempt();
       const msg = getFriendlyErrorMessage(error);
@@ -6189,6 +6191,9 @@ export default function App() {
   // Verification Gate for Email/Password users
   const isBypassed = localStorage.getItem('bypass_email_verification') === 'true';
   if (!user.emailVerified && !isBypassed) {
+    if (window.location.pathname !== '/verification') {
+      window.history.replaceState(null, '', '/verification');
+    }
     return (
       <>
         <VerificationScreen 
