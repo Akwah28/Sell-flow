@@ -338,7 +338,7 @@ async function startServer() {
       setHeaders: (res, filePath) => {
         if (filePath.endsWith(".html")) {
           res.setHeader("Cache-Control", "no-cache");
-        } else if (filePath.match(/\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2)$/)) {
+        } else if (filePath.match(/\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|webmanifest|json)$/)) {
           res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
         }
       }
