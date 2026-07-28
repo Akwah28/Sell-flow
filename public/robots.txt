@@ -9,4 +9,4 @@ Disallow: /settings
 Disallow: /api/
 Disallow: /admin/
 
-Sitemap: https://mysellflow.com/sitemap.xml
+Sitemap: https://mysellflow.store/sitemap.xml
