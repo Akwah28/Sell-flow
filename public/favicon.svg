@@ -1,41 +1,64 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <linearGradient id="bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#5B2FD4" />
-      <stop offset="50%" stop-color="#2563EB" />
+    <!-- Outer Glow / Ring Gradient -->
+    <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8B5CF6" />
+      <stop offset="50%" stop-color="#3B82F6" />
       <stop offset="100%" stop-color="#10B981" />
     </linearGradient>
-    <linearGradient id="ring-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+
+    <!-- Chat Bubble Gradient -->
+    <linearGradient id="bubbleGrad" x1="15%" y1="15%" x2="85%" y2="85%">
       <stop offset="0%" stop-color="#6366F1" />
-      <stop offset="50%" stop-color="#0284C7" />
-      <stop offset="100%" stop-color="#10B981" />
+      <stop offset="50%" stop-color="#3B82F6" />
+      <stop offset="100%" stop-color="#06B6D4" />
     </linearGradient>
+
+    <!-- Dark Inner Circle Gradient -->
+    <radialGradient id="innerBgGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#111827" />
+      <stop offset="100%" stop-color="#05070E" />
+    </radialGradient>
   </defs>
 
-  <!-- Outer background circle -->
-  <circle cx="256" cy="256" r="256" fill="#090D16" />
+  <!-- Outer Dark Frame / Badge Circle -->
+  <circle cx="256" cy="256" r="250" fill="#04060A" />
 
-  <!-- Outer gradient ring -->
-  <circle cx="256" cy="256" r="236" fill="none" stroke="url(#ring-grad)" stroke-width="14" />
+  <!-- Outer Gradient Ring -->
+  <circle cx="256" cy="256" r="238" fill="none" stroke="url(#ringGrad)" stroke-width="10" opacity="0.95" />
 
-  <!-- Inner subtle border ring -->
-  <circle cx="256" cy="256" r="206" fill="none" stroke="#1E293B" stroke-width="6" />
+  <!-- Inner Dark Circle -->
+  <circle cx="256" cy="256" r="218" fill="url(#innerBgGrad)" />
 
-  <!-- Inner dark base circle -->
-  <circle cx="256" cy="256" r="203" fill="#0B1120" />
+  <!-- Chat Bubble -->
+  <path d="M 256,112 
+           C 338,112 402,172 402,248 
+           C 402,324 338,384 256,384 
+           C 229,384 204,377 182,365 
+           L 136,388 
+           C 127,392 118,383 122,374 
+           L 138,338 
+           C 120,312 110,281 110,248 
+           C 110,172 174,112 256,112 Z" 
+        fill="url(#bubbleGrad)" />
 
-  <!-- Main speech bubble pointing to bottom-left -->
-  <path d="M 256,116 C 176,116 124,162 124,232 C 124,260 133,286 149,307 L 132,374 L 202,358 C 218,366 236,370 256,370 C 336,370 388,324 388,254 C 388,184 336,116 256,116 Z" fill="url(#bg-grad)" />
+  <!-- Shopping Bag Handle (White Arc) -->
+  <path d="M 218,220 A 38,38 0 0,1 294,220" 
+        fill="none" 
+        stroke="#FFFFFF" 
+        stroke-width="14" 
+        stroke-linecap="round" />
 
-  <!-- Shopping Bag inside speech bubble -->
-  <!-- Handle -->
-  <path d="M 224,212 C 224,182 288,182 288,212" fill="none" stroke="#FFFFFF" stroke-width="12" stroke-linecap="round" />
+  <!-- Shopping Bag Body (White Rounded Box) -->
+  <rect x="184" y="214" width="144" height="110" rx="22" fill="#FFFFFF" />
 
-  <!-- Bag Body -->
-  <rect x="198" y="212" width="116" height="100" rx="18" fill="#FFFFFF" />
-
-  <!-- 3 Dots inside Bag -->
-  <circle cx="232" cy="262" r="9" fill="#10B981" />
-  <circle cx="256" cy="262" r="9" fill="#5B2FD4" />
-  <circle cx="280" cy="262" r="9" fill="#10B981" />
+  <!-- Three Dots on the Bag -->
+  <!-- Left Dot: Teal/Green -->
+  <circle cx="216" cy="269" r="13" fill="#10B981" />
+  
+  <!-- Middle Dot: Purple -->
+  <circle cx="256" cy="269" r="13" fill="#8B5CF6" />
+  
+  <!-- Right Dot: Teal/Green -->
+  <circle cx="296" cy="269" r="13" fill="#10B981" />
 </svg>
