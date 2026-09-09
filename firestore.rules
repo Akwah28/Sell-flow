@@ -115,7 +115,8 @@ service cloud.firestore {
 
     match /slugs/{slug} {
       allow get, list: if true;
-      allow create, update: if isSignedIn() && incoming().ownerId == request.auth.uid && isValidSlugMapping(incoming());
+      allow create: if isSignedIn() && incoming().ownerId == request.auth.uid && isValidSlugMapping(incoming());
+      allow update: if isSignedIn() && existing().ownerId == request.auth.uid && incoming().ownerId == request.auth.uid && isValidSlugMapping(incoming());
       allow delete: if isSignedIn() && existing().ownerId == request.auth.uid;
     }
 

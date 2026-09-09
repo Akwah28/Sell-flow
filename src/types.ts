@@ -58,6 +58,7 @@ export interface Order {
   fulfillmentStatus: OrderStatus;
   notes: string;
   createdAt: string;
+  ownerId?: string;
 }
 
 export interface BusinessProfile {

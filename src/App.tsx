@@ -43,8 +43,11 @@ import {
   ArrowLeft,
   Edit2,
   Check,
-  X
+  X,
+  Loader2,
+  UserPlus
 } from 'lucide-react';
+import CreateAccountModal from './components/CreateAccountModal';
 import { motion, AnimatePresence, animate } from 'framer-motion';
 import LandingPage from './components/LandingPage';
 import ExplorePage from './components/ExplorePage';
@@ -2369,9 +2372,10 @@ const ReviewsPage = ({ reviews, products }: { reviews: Review[], products: Produ
 };
 
 const SettingsPage = ({ business, setBusiness, onLogout, showToast }: { business: BusinessProfile, setBusiness: (b: BusinessProfile) => void, onLogout: () => void, showToast?: (m: string, t?: 'success' | 'error' | 'info') => void }) => {
-  const [activeTab, setActiveTab] = useState<'profile' | 'storefront' | 'whatsapp'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'storefront' | 'whatsapp' | 'accounts'>('profile');
   const [localBusiness, setLocalBusiness] = useState<BusinessProfile>(business);
   const [isDraggingLogo, setIsDraggingLogo] = useState(false);
+  const [isCreateAccountOpen, setIsCreateAccountOpen] = useState(false);
   const logoInputRef = React.useRef<HTMLInputElement>(null);
 
   const handleLogoUpload = async (file: File) => {
@@ -2414,6 +2418,7 @@ const SettingsPage = ({ business, setBusiness, onLogout, showToast }: { business
     { id: 'profile', label: 'Business Profile', icon: Users },
     { id: 'storefront', label: 'Storefront & Sales', icon: Store },
     { id: 'whatsapp', label: 'WhatsApp API', icon: MessageSquare },
+    { id: 'accounts', label: 'Create Client Account', icon: UserPlus },
   ];
 
   return (
@@ -2856,10 +2861,53 @@ const SettingsPage = ({ business, setBusiness, onLogout, showToast }: { business
                   </div>
                 </motion.div>
               )}
+
+              {activeTab === 'accounts' && (
+                <motion.div 
+                  key="accounts"
+                  initial={{ opacity: 0, x: 10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -10 }}
+                  className="space-y-6"
+                >
+                  <div className="border-b border-slate-100 pb-4">
+                    <h3 className="text-base font-bold text-slate-900">Provision Client & Merchant Accounts</h3>
+                    <p className="text-xs text-slate-500">Create new store accounts for other merchants without signing out of your session.</p>
+                  </div>
+
+                  <div className="bg-purple-50/60 border border-purple-100 rounded-2xl p-6 text-center space-y-4">
+                    <div className="w-14 h-14 rounded-2xl bg-purple-100 text-purple-600 flex items-center justify-center mx-auto shadow-sm">
+                      <UserPlus size={26} />
+                    </div>
+                    <div className="max-w-md mx-auto space-y-1">
+                      <h4 className="font-black text-slate-900 text-base">Instant Store Account Creation</h4>
+                      <p className="text-xs text-slate-500 leading-relaxed">
+                        Email verification is disabled so newly registered stores can sign in right away. Generate custom login credentials, store slugs, and copy full login instructions for your clients.
+                      </p>
+                    </div>
+                    <div className="pt-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsCreateAccountOpen(true)}
+                        className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-6 py-3 rounded-xl shadow-lg shadow-purple-600/20 transition-all inline-flex items-center gap-2 cursor-pointer"
+                      >
+                        <UserPlus size={16} />
+                        <span>Launch Account Creator Modal</span>
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
             </AnimatePresence>
           </Card>
         </div>
       </div>
+
+      <CreateAccountModal
+        isOpen={isCreateAccountOpen}
+        onClose={() => setIsCreateAccountOpen(false)}
+        showToast={showToast}
+      />
     </div>
   );
 };
@@ -2868,7 +2916,12 @@ const SettingsPage = ({ business, setBusiness, onLogout, showToast }: { business
 const isStorefrontSlug = (path: string): boolean => {
   if (!path) return false;
   if (path.includes('.')) return false;
-  const reserved = ['assets', 'api', 'dashboard', 'products', 'leads', 'followups', 'orders', 'reviews', 'settings', 'index.html', 'explore', 'store', 'admindashboard'];
+  const reserved = [
+    'assets', 'api', 'dashboard', 'products', 'leads', 'followups', 'orders', 'reviews', 
+    'settings', 'index.html', 'explore', 'store', 'login', 'signin', 'signup', 'register', 
+    'auth', 'verification', 'verify', 'admin', 'admindashboard', 'app', 'sales', 'support', 
+    'mail', 'blog', 'www', 'privacy', 'terms', 'contact', 'faq', 'about', 'help'
+  ];
   if (reserved.includes(path.toLowerCase())) return false;
   return /^[a-zA-Z0-9_\-]+$/.test(path);
 };
@@ -2907,7 +2960,10 @@ const resolveStorefrontSlug = (): string | null => {
     
     if (cleanSub) {
       // Check reserved
-      const reserved = ['www', 'admin', 'api', 'app', 'sales', 'dashboard', 'support', 'mail', 'blog'];
+      const reserved = [
+        'www', 'admin', 'api', 'app', 'sales', 'dashboard', 'support', 'mail', 'blog',
+        'login', 'signin', 'signup', 'register', 'auth', 'verification', 'verify', 'admindashboard'
+      ];
       if (!reserved.includes(cleanSub) && isStorefrontSlug(cleanSub)) {
         return cleanSub;
       }
@@ -2919,7 +2975,7 @@ const resolveStorefrontSlug = (): string | null => {
     const parts = hostWithoutPort.split('.');
     if (parts.length > 1) {
       const sub = parts[0].trim();
-      const reserved = ['www', 'admin', 'api', 'localhost'];
+      const reserved = ['www', 'admin', 'api', 'localhost', 'app', 'dashboard'];
       if (!reserved.includes(sub) && isStorefrontSlug(sub)) {
         return sub;
       }
@@ -2930,7 +2986,9 @@ const resolveStorefrontSlug = (): string | null => {
   const firstPathSegment = pathname.split('/')[0];
   const reservedPaths = [
     'www', 'admin', 'api', 'app', 'sales', 'dashboard', 'support', 'mail', 'blog', 'localhost',
-    'explore', 'settings', 'signin', 'signup', 'orders', 'leads', 'products', 'reviews', 'followups', 'store', 'verification', 'auth', 'admindashboard', ''
+    'explore', 'settings', 'signin', 'signup', 'login', 'register', 'orders', 'leads', 'products', 
+    'reviews', 'followups', 'store', 'verification', 'verify', 'auth', 'admindashboard', 'privacy', 
+    'terms', 'contact', 'faq', 'about', 'help', ''
   ];
   if (!reservedPaths.includes(firstPathSegment) && isStorefrontSlug(firstPathSegment)) {
     return firstPathSegment;
@@ -4619,6 +4677,7 @@ const AuthScreen = ({
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   
   // Forgot Password feature
@@ -4679,25 +4738,47 @@ const AuthScreen = ({
     }
   };
 
-  const handleLogin = () => {
-    const provider = new GoogleAuthProvider();
-    signInWithPopup(auth, provider).catch((error: any) => {
+  const handleLogin = async () => {
+    if (googleLoading) return;
+    setGoogleLoading(true);
+    try {
+      const provider = new GoogleAuthProvider();
+      // Forces account chooser so users can freely switch or select ANY of their Google accounts!
+      provider.setCustomParameters({ prompt: 'select_account' });
+      provider.addScope('email');
+      provider.addScope('profile');
+      
+      await signInWithPopup(auth, provider);
+      if (showToast) showToast("Signed in with Google successfully!", "success");
+    } catch (error: any) {
       console.error("Google Auth error:", error);
-      const isIframe = window.self !== window.top;
+      const isIframe = typeof window !== 'undefined' && window.self !== window.top;
+      
+      // User closed popup or cancelled - normal user cancellation, avoid alarming toast
+      if (error?.code === 'auth/popup-closed-by-user' || error?.code === 'auth/cancelled-popup-request') {
+        return;
+      }
+      
       let errorMsg = "Google sign in failed. Please try again or use Email login.";
       
       if (error?.code === 'auth/popup-blocked') {
-        errorMsg = "Google pop-up was blocked. Please allow popups or use Email & Password instead.";
-      } else if (isIframe) {
-        errorMsg = "Google Sign-In failed. Sandboxed iframe environments often block authentication. Please click the Link below or 'Open App' to sign in!";
-      } else if (error?.code === 'auth/auth-domain-config-required' || error?.message?.includes('auth-domain')) {
+        errorMsg = "Google pop-up was blocked by your browser. Please allow popups for this site or use Email & Password instead.";
+      } else if (error?.code === 'auth/account-exists-with-different-credential') {
+        errorMsg = "An account with this email already exists using password. Please sign in with your email and password.";
+      } else if (error?.code === 'auth/unauthorized-domain' || error?.code === 'auth/auth-domain-config-required' || error?.message?.includes('auth-domain')) {
         errorMsg = "Firebase Authentication error: Please ensure this domain is added to 'Authorized Domains' in your Firebase console.";
+      } else if (error?.code === 'auth/network-request-failed') {
+        errorMsg = isIframe 
+          ? "Network request failed. Sandboxed environments often restrict third-party authentication. Please click 'Open App in New Tab' above."
+          : "Network connection failed. Please check your internet connection and try again.";
       } else if (error?.message) {
         errorMsg = `Google sign-in error: ${error.message}`;
       }
       
       if (showToast) showToast(errorMsg, "error");
-    });
+    } finally {
+      setGoogleLoading(false);
+    }
   };
 
   const handleSignIn = async (e: React.FormEvent) => {
@@ -4746,10 +4827,12 @@ const AuthScreen = ({
 
     setLoading(true);
     try {
-      const credential = await createUserWithEmailAndPassword(auth, email, password);
-      await sendEmailVerification(credential.user);
-      if (showToast) showToast("Registration complete! A verification message is sent to your email.", "success");
-      window.history.pushState(null, '', '/verification');
+      await createUserWithEmailAndPassword(auth, email, password);
+      setFailedAttempts(0);
+      setLockoutTime(null);
+      if (showToast) showToast("Account created successfully! Welcome to SellFlow.", "success");
+      if (onBackToLanding) onBackToLanding();
+      window.history.pushState(null, '', '/');
       window.dispatchEvent(new Event('pushstate_changed'));
     } catch (error: any) {
       handleFailedAttempt();
@@ -5008,10 +5091,15 @@ const AuthScreen = ({
               <button 
                 type="button"
                 onClick={handleLogin}
-                className="w-full bg-white/5 border border-white/10 hover:bg-white/10 text-white py-3.5 rounded-xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-3 transition-all active:scale-95 shadow-xl cursor-pointer"
+                disabled={googleLoading}
+                className="w-full bg-white/5 border border-white/10 hover:bg-white/10 disabled:opacity-60 text-white py-3.5 rounded-xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-3 transition-all active:scale-95 shadow-xl cursor-pointer"
               >
-                <img src="https://www.google.com/favicon.ico" className="w-4 h-4" alt="Google" />
-                Continue with Google
+                {googleLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-white" />
+                ) : (
+                  <img src="https://www.google.com/favicon.ico" className="w-4 h-4" alt="Google" />
+                )}
+                {googleLoading ? "Connecting with Google..." : "Continue with Google"}
               </button>
 
               {window.self !== window.top && (
@@ -5213,6 +5301,17 @@ export default function App() {
       // Sync public slug if the route corresponds to standard storefront, otherwise clear
       const slug = resolveStorefrontSlug();
       setPublicSlug(slug);
+
+      // Deep link to Auth pages if URL path requests authentication
+      if (['login', 'signin', 'auth'].includes(path)) {
+        setShowAuth(true);
+        setAuthTab('signin');
+      } else if (['signup', 'register'].includes(path)) {
+        setShowAuth(true);
+        setAuthTab('signup');
+      } else if (path === 'verification') {
+        pushRoute('/');
+      }
     };
 
     window.addEventListener('popstate', handleLocationChange);
@@ -5308,8 +5407,14 @@ export default function App() {
 
   const [activePage, setActivePage] = useState('dashboard');
   const [isWizardTriggered, setIsWizardTriggered] = useState(false);
-  const [showAuth, setShowAuth] = useState(false);
-  const [authTab, setAuthTab] = useState<'signin' | 'signup'>('signin');
+  const [showAuth, setShowAuth] = useState(() => {
+    const p = typeof window !== 'undefined' ? window.location.pathname.replace(/^\/+|\/+$/g, '').toLowerCase().trim() : '';
+    return ['login', 'signin', 'signup', 'register', 'auth'].includes(p);
+  });
+  const [authTab, setAuthTab] = useState<'signin' | 'signup'>(() => {
+    const p = typeof window !== 'undefined' ? window.location.pathname.replace(/^\/+|\/+$/g, '').toLowerCase().trim() : '';
+    return (p === 'signup' || p === 'register') ? 'signup' : 'signin';
+  });
   const [business, setBusiness] = useState<BusinessProfile>(INITIAL_BUSINESS);
   const [products, setProducts] = useState<Product[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -5535,13 +5640,12 @@ export default function App() {
 
   // Data Persistence Listeners
   useEffect(() => {
-    const isBypassed = localStorage.getItem('bypass_email_verification') === 'true';
-    if (!user || (!user.emailVerified && !isBypassed)) return;
+    if (!user) return;
     isFirstReviewsLoad.current = true;
 
     // 1. Business Profile
     console.log("Setting up Firestore listeners for UID:", user.uid);
-    const unsubBusiness = onSnapshot(doc(db, 'businesses', user.uid), (snapshot) => {
+    const unsubBusiness = onSnapshot(doc(db, 'businesses', user.uid), async (snapshot) => {
       if (snapshot.exists()) {
         console.log("Business profile found in Firestore");
         const data = snapshot.data();
@@ -5551,24 +5655,36 @@ export default function App() {
           ownerId: user.uid // Ensure ownerId is correct
         } as BusinessProfile);
       } else {
-        console.log("No business profile found, creating initial one...");
-        const initialSlug = (INITIAL_BUSINESS.storeSlug || 'shop').toLowerCase().trim();
+        console.log("No business profile found, creating initial one for UID:", user.uid);
+        const rawName = user.displayName || (user.email ? user.email.split('@')[0] : 'My Store');
+        const cleanBase = rawName.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 15) || 'shop';
+        const uidSuffix = user.uid.slice(0, 5).toLowerCase().replace(/[^a-z0-9]/g, '') || 'store';
+        const initialSlug = `${cleanBase}-${uidSuffix}`;
+
         const newBusiness: BusinessProfile = {
           ...INITIAL_BUSINESS,
-          name: user.displayName || user.email?.split('@')[0] || 'New Business',
+          name: rawName,
           ownerId: user.uid,
           storeSlug: initialSlug,
           storefrontUrl: `https://${initialSlug}.mysellflow.store`,
           subdomain: `${initialSlug}.mysellflow.store`
         };
-        setDoc(doc(db, 'slugs', initialSlug), {
-          ownerId: user.uid,
-          businessName: newBusiness.name
-        }).catch(e => console.error("Initial slug map write failed:", e));
 
-        setDoc(doc(db, 'businesses', user.uid), newBusiness)
-          .then(() => console.log("Initial business profile created successfully"))
-          .catch(e => handleFirestoreError(e, OperationType.WRITE, 'businesses'));
+        try {
+          await setDoc(doc(db, 'slugs', initialSlug), {
+            ownerId: user.uid,
+            businessName: newBusiness.name
+          });
+        } catch (e) {
+          console.warn("Initial slug map write error:", e);
+        }
+
+        try {
+          await setDoc(doc(db, 'businesses', user.uid), newBusiness);
+          console.log("Initial business profile created successfully");
+        } catch (e) {
+          handleFirestoreError(e, OperationType.WRITE, 'businesses');
+        }
       }
     }, (error) => handleFirestoreError(error, OperationType.GET, 'businesses'));
 
@@ -6164,7 +6280,12 @@ export default function App() {
           <AuthScreen 
             showToast={showToast} 
             initialTab={authTab}
-            onBackToLanding={() => setShowAuth(false)}
+            onBackToLanding={() => {
+              setShowAuth(false);
+              if (['login', 'signin', 'signup', 'register', 'auth'].includes(currentPath)) {
+                pushRoute('/');
+              }
+            }}
           />
           <ToastContainer toasts={toasts} onClose={(id) => setToasts(prev => prev.filter(t => t.id !== id))} />
         </>
@@ -6188,26 +6309,10 @@ export default function App() {
     );
   }
 
-  // Verification Gate for Email/Password users
-  const isBypassed = localStorage.getItem('bypass_email_verification') === 'true';
-  if (!user.emailVerified && !isBypassed) {
-    if (window.location.pathname !== '/verification') {
-      window.history.replaceState(null, '', '/verification');
-    }
-    return (
-      <>
-        <VerificationScreen 
-          user={user} 
-          showToast={showToast} 
-          onBypass={() => {
-            localStorage.setItem('bypass_email_verification', 'true');
-            if (showToast) showToast("Switched to offline testing/demo auth context!", "info");
-            window.location.reload();
-          }}
-        />
-        <ToastContainer toasts={toasts} onClose={(id) => setToasts(prev => prev.filter(t => t.id !== id))} />
-      </>
-    );
+  // Email verification requirement removed per user request:
+  // All accounts (Google and Email/Password) have immediate full access to their dashboard.
+  if (typeof window !== 'undefined' && window.location.pathname === '/verification') {
+    window.history.replaceState(null, '', '/');
   }
 
   const lowStockCount = products.filter(p => (p.inventoryStatus || 'in_stock') === 'low_stock').length;

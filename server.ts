@@ -101,7 +101,13 @@ function injectMeta(htmlContent: string, metaTitle: string, metaDesc: string, st
 function isStorefrontSlug(path: string): boolean {
   if (!path) return false;
   if (path.includes('.')) return false;
-  const reserved = ['assets', 'api', 'dashboard', 'products', 'leads', 'followups', 'orders', 'reviews', 'settings', 'index.html', 'explore', 'store'];
+  const reserved = [
+    'assets', 'api', 'dashboard', 'products', 'leads', 'followups', 'orders', 'reviews', 
+    'settings', 'index.html', 'explore', 'store', 'login', 'signin', 'signup', 'register', 
+    'auth', 'verification', 'verify', 'admin', 'admindashboard', 'app', 'sales', 'support', 
+    'mail', 'blog', 'www', 'privacy', 'terms', 'contact', 'faq', 'about', 'help', 
+    'robots.txt', 'sitemap.xml', 'favicon.ico', 'site.webmanifest'
+  ];
   if (reserved.includes(path.toLowerCase())) return false;
   return /^[a-zA-Z0-9_\-]+$/.test(path);
 }
@@ -378,8 +384,9 @@ async function startServer() {
           
           if (!slugSnap.exists()) {
             console.log(`[Storefront Gateway] Storefront slug "${storeSlug}" not found in Firestore.`);
-            // Return professional 404 HTML
-            return res.status(404).send(`
+            // If requested via subdomain, show dedicated Store Not Found page
+            if (subdomain) {
+              return res.status(404).send(`
               <!doctype html>
               <html lang="en">
                 <head>
@@ -413,6 +420,9 @@ async function startServer() {
                 </body>
               </html>
             `);
+            }
+            // Otherwise, let the client-side SPA router handle it
+            return res.sendFile(path.join(distPath, "index.html"));
           }
           
           const { ownerId } = slugSnap.data();

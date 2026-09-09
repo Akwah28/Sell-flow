@@ -26,8 +26,10 @@ import {
   Star,
   Check,
   X,
-  Compass
+  Compass,
+  UserPlus
 } from 'lucide-react';
+import CreateAccountModal from './CreateAccountModal';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   BarChart, 
@@ -284,7 +286,8 @@ const SANDBOX_ORDERS: Order[] = [
     paymentStatus: "paid",
     fulfillmentStatus: "processing",
     notes: "Ship with custom handwritten card.",
-    createdAt: new Date(Date.now() - 3600000 * 22).toISOString()
+    createdAt: new Date(Date.now() - 3600000 * 22).toISOString(),
+    ownerId: "admin_demo"
   },
   {
     id: "ord_2",
@@ -294,7 +297,8 @@ const SANDBOX_ORDERS: Order[] = [
     paymentStatus: "pending",
     fulfillmentStatus: "pending",
     notes: "Awaiting bank transfer confirmation.",
-    createdAt: new Date(Date.now() - 3600000 * 2).toISOString()
+    createdAt: new Date(Date.now() - 3600000 * 2).toISOString(),
+    ownerId: "admin_demo"
   },
   {
     id: "ord_3",
@@ -304,7 +308,8 @@ const SANDBOX_ORDERS: Order[] = [
     paymentStatus: "paid",
     fulfillmentStatus: "delivered",
     notes: "Delivered via express dispatcher.",
-    createdAt: new Date(Date.now() - 3600000 * 4).toISOString()
+    createdAt: new Date(Date.now() - 3600000 * 4).toISOString(),
+    ownerId: "admin_demo"
   }
 ];
 
@@ -357,6 +362,9 @@ export default function AdminDashboard() {
 
   // Action Pending States (avoid multiple quick clicks)
   const [actionPendingId, setActionPendingId] = useState<string | null>(null);
+
+  // Modal to create accounts for other merchants/clients
+  const [isCreateAccountOpen, setIsCreateAccountOpen] = useState(false);
 
   // UTC Live Clock
   useEffect(() => {
@@ -795,7 +803,8 @@ export default function AdminDashboard() {
           paymentStatus: ord.paymentStatus,
           fulfillmentStatus: ord.fulfillmentStatus,
           notes: ord.notes,
-          createdAt: ord.createdAt
+          createdAt: ord.createdAt,
+          ownerId: ord.ownerId || 'admin_demo'
         });
       }
 
@@ -1340,16 +1349,26 @@ export default function AdminDashboard() {
                     <p className="text-[10px] text-slate-500 uppercase font-black mt-0.5">Toggle PRO verification and inject test clicks/views live</p>
                   </div>
                   
-                  {/* Search input */}
-                  <div className="relative w-full md:w-80">
-                    <Search className="absolute left-3 top-2.5 text-slate-500" size={14} />
-                    <input
-                      type="text"
-                      placeholder="Search business name, slug, or WhatsApp..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full bg-slate-950/80 border border-slate-800 focus:border-purple-500/50 outline-none p-2.5 pl-9 pr-4 rounded-xl text-xs font-semibold text-slate-200 placeholder-slate-600 transition-colors"
-                    />
+                  {/* Search and Create Merchant Action */}
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
+                    <div className="relative w-full md:w-72">
+                      <Search className="absolute left-3 top-2.5 text-slate-500" size={14} />
+                      <input
+                        type="text"
+                        placeholder="Search business name, slug, or WhatsApp..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full bg-slate-950/80 border border-slate-800 focus:border-purple-500/50 outline-none p-2.5 pl-9 pr-4 rounded-xl text-xs font-semibold text-slate-200 placeholder-slate-600 transition-colors"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsCreateAccountOpen(true)}
+                      className="bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-purple-600/20 transition-all shrink-0 cursor-pointer"
+                    >
+                      <UserPlus size={14} />
+                      <span>+ Create Merchant</span>
+                    </button>
                   </div>
                 </div>
 
@@ -2099,6 +2118,16 @@ export default function AdminDashboard() {
           </motion.div>
         </div>
       )}
+
+      {/* Modal to Create Account for Other Merchants */}
+      <CreateAccountModal 
+        isOpen={isCreateAccountOpen}
+        onClose={() => setIsCreateAccountOpen(false)}
+        showToast={(msg, type) => showToast(msg, type === 'error' ? 'error' : 'success')}
+        onAccountCreated={(result) => {
+          fetchData(true);
+        }}
+      />
 
     </div>
   );
