@@ -130,20 +130,26 @@ export const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
 
   const copyField = (field: 'email' | 'password') => {
     if (!createdResult) return;
-    const val = field === 'email' ? createdResult.email : (createdResult.password || '');
+    const val = field === 'email' ? (createdResult.loginEmail || createdResult.email) : (createdResult.password || '');
     navigator.clipboard.writeText(val);
     setCopiedField(field);
-    showToast?.(`${field === 'email' ? 'Email' : 'Password'} copied!`, 'success');
+    showToast?.(`${field === 'email' ? 'Login identifier' : 'Password'} copied!`, 'success');
     setTimeout(() => setCopiedField(null), 2500);
   };
 
   const copyCredentials = () => {
     if (!createdResult) return;
-    const text = `🎉 SellFlow Merchant Account Credentials\n\n` +
+    const loginIdent = createdResult.loginEmail || createdResult.email;
+    let text = `🎉 SellFlow Merchant Account Credentials\n\n` +
       `🏪 Store: ${createdResult.merchantName}\n` +
       `🔗 Storefront: ${createdResult.storefrontUrl}\n` +
-      `🔑 Login Email: ${createdResult.email}\n` +
-      `🔒 Password: ${createdResult.password || '******'}\n` +
+      `🔑 Login Identifier: ${loginIdent}\n`;
+    
+    if (createdResult.loginEmail && createdResult.loginEmail !== createdResult.email) {
+      text += `📧 Contact Email: ${createdResult.email}\n`;
+    }
+
+    text += `🔒 Password: ${createdResult.password || '******'}\n` +
       `📲 Login URL: ${createdResult.loginUrl}\n\n` +
       `Sign in to manage inventory, view orders, and customize your storefront.`;
 
@@ -241,16 +247,25 @@ export const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
                   </a>
                 </div>
                 
-                {/* Email with 1-click copy */}
+                {/* Login Identifier with 1-click copy */}
                 <div className="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800/80 flex items-center justify-between">
                   <div className="min-w-0 pr-2">
-                    <span className="text-slate-500 block text-[9px] uppercase font-bold tracking-wider">Login Email</span>
-                    <span className="font-mono text-slate-200 text-xs font-semibold truncate block">{createdResult.email}</span>
+                    <span className="text-slate-500 block text-[9px] uppercase font-bold tracking-wider">
+                      {createdResult.loginEmail && createdResult.loginEmail !== createdResult.email ? 'Login Identifier / Store Email' : 'Login Email'}
+                    </span>
+                    <span className="font-mono text-slate-200 text-xs font-semibold truncate block">
+                      {createdResult.loginEmail || createdResult.email}
+                    </span>
+                    {createdResult.loginEmail && createdResult.loginEmail !== createdResult.email && (
+                      <span className="text-[10px] text-slate-400 block mt-0.5 truncate">
+                        Contact: {createdResult.email}
+                      </span>
+                    )}
                   </div>
                   <button
                     type="button"
                     onClick={() => copyField('email')}
-                    title="Copy Email"
+                    title="Copy Login Identifier"
                     className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer shrink-0"
                   >
                     {copiedField === 'email' ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}

@@ -35,6 +35,7 @@ export interface CreateMerchantAccountParams {
 export interface CreatedMerchantResult {
   uid: string;
   email: string;
+  loginEmail?: string;
   merchantName: string;
   storeSlug: string;
   storefrontUrl: string;
@@ -47,7 +48,7 @@ export async function createMerchantAccountForOther(
 ): Promise<CreatedMerchantResult> {
   const { email, password, merchantName, currency = 'USD', whatsappNumber = '' } = params;
 
-  const cleanEmail = (email || '').trim();
+  const cleanEmail = (email || '').trim().toLowerCase();
   const cleanPassword = (password || '').trim();
   const cleanMerchantName = (merchantName || '').trim();
 
@@ -80,56 +81,87 @@ export async function createMerchantAccountForOther(
   );
 
   try {
-    // 1. Create account in Firebase Auth with cleanly trimmed credentials
-    const cred = await createUserWithEmailAndPassword(secondaryAuth, cleanEmail, cleanPassword);
-    const uid = cred.user.uid;
+    let authEmailUsed = cleanEmail;
+    let uid = '';
 
-    if (cred.user) {
+    // 1. Create account in Firebase Auth with cleanly trimmed credentials
+    try {
+      const cred = await createUserWithEmailAndPassword(secondaryAuth, cleanEmail, cleanPassword);
+      uid = cred.user.uid;
       await updateProfile(cred.user, { displayName: cleanMerchantName });
+    } catch (authErr: any) {
+      if (authErr.code === 'auth/email-already-in-use') {
+        // If email is already registered, provision store with dedicated slug login address
+        authEmailUsed = `${cleanSlug}@mysellflow.store`;
+        try {
+          const cred = await createUserWithEmailAndPassword(secondaryAuth, authEmailUsed, cleanPassword);
+          uid = cred.user.uid;
+          await updateProfile(cred.user, { displayName: cleanMerchantName });
+        } catch (slugAuthErr: any) {
+          if (slugAuthErr.code === 'auth/email-already-in-use') {
+            authEmailUsed = `${cleanSlug}.${Date.now().toString(36).slice(-4)}@mysellflow.store`;
+            const cred = await createUserWithEmailAndPassword(secondaryAuth, authEmailUsed, cleanPassword);
+            uid = cred.user.uid;
+            await updateProfile(cred.user, { displayName: cleanMerchantName });
+          } else {
+            throw slugAuthErr;
+          }
+        }
+      } else {
+        throw authErr;
+      }
     }
 
-    const storefrontUrl = `https://${cleanSlug}.mysellflow.store`;
+    // 2. Sign in as admin to verify slug uniqueness and write documents with full permissions
+    await signOut(secondaryAuth);
+    await signInWithEmailAndPassword(secondaryAuth, ADMIN_SYSTEM_EMAIL, ADMIN_SYSTEM_PASS);
+
+    // Ensure slug does not conflict with another merchant's existing store
+    let finalSlug = cleanSlug;
+    try {
+      const existingSlugSnap = await getDoc(doc(secondaryDb, 'slugs', finalSlug));
+      if (existingSlugSnap.exists() && existingSlugSnap.data()?.ownerId !== uid) {
+        finalSlug = `${cleanSlug}-${Date.now().toString(36).slice(-3)}`;
+      }
+    } catch (slugCheckErr) {
+      console.warn('Slug check notice:', slugCheckErr);
+    }
+
+    const storefrontUrl = `https://${finalSlug}.mysellflow.store`;
     const newBusiness: BusinessProfile = {
       name: cleanMerchantName,
       description: `Welcome to ${cleanMerchantName}. Browse our latest collection and contact us to order!`,
       currency,
       whatsappNumber: (whatsappNumber || '').trim(),
-      storeSlug: cleanSlug,
+      storeSlug: finalSlug,
       isVerified: false,
       ownerId: uid,
       email: cleanEmail,
+      loginEmail: authEmailUsed,
       managedPassword: cleanPassword,
       metaTitle: `${cleanMerchantName} - Official Store`,
       metaDescription: `Discover quality items and order directly via WhatsApp from ${cleanMerchantName}.`,
       storefrontUrl,
-      subdomain: cleanSlug,
+      subdomain: finalSlug,
       views: 0,
       clicksMessageMerchant: 0,
       clicksWhatsAppOrder: 0
     };
 
-    // 2. Initialize business document under the new merchant's authenticated UID
-    try {
-      await setDoc(doc(secondaryDb, 'businesses', uid), newBusiness);
-    } catch (bizErr) {
-      console.warn('Initial business profile write warning:', bizErr);
-    }
+    // 3. Write business document with admin authorization
+    await setDoc(doc(secondaryDb, 'businesses', uid), newBusiness);
 
-    // 3. Initialize public slug mapping
-    try {
-      await setDoc(doc(secondaryDb, 'slugs', cleanSlug), {
-        ownerId: uid,
-        businessName: cleanMerchantName
-      });
-    } catch (slugErr) {
-      console.warn('Slug registry write warning:', slugErr);
-    }
+    // 4. Write public slug mapping with admin authorization
+    await setDoc(doc(secondaryDb, 'slugs', finalSlug), {
+      ownerId: uid,
+      businessName: cleanMerchantName
+    });
 
-    // 4. Verify that the newly created account credentials actually work with signIn
+    // 5. Verify that the newly created account credentials actually work with signIn
     await signOut(secondaryAuth);
     try {
-      await signInWithEmailAndPassword(secondaryAuth, cleanEmail, cleanPassword);
-      console.log('Account credentials verified successfully for:', cleanEmail);
+      await signInWithEmailAndPassword(secondaryAuth, authEmailUsed, cleanPassword);
+      console.log('Account credentials verified successfully for:', authEmailUsed);
       await signOut(secondaryAuth);
     } catch (testAuthErr: any) {
       console.error('Credential verification test failed:', testAuthErr);
@@ -140,8 +172,9 @@ export async function createMerchantAccountForOther(
     return {
       uid,
       email: cleanEmail,
+      loginEmail: authEmailUsed,
       merchantName: cleanMerchantName,
-      storeSlug: cleanSlug,
+      storeSlug: finalSlug,
       storefrontUrl,
       loginUrl: `${origin}/login`,
       password: cleanPassword

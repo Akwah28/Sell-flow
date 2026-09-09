@@ -5775,6 +5775,8 @@ export default function App() {
         const newBusiness: BusinessProfile = {
           ...INITIAL_BUSINESS,
           name: rawName,
+          email: user.email || '',
+          loginEmail: user.email || '',
           ownerId: user.uid,
           storeSlug: initialSlug,
           storefrontUrl: `https://${initialSlug}.mysellflow.store`,
@@ -5807,27 +5809,33 @@ export default function App() {
       setProducts(prods);
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'products'));
 
-    // 3. Leads
-    const qLeads = query(collection(db, 'leads'), where('ownerId', '==', user.uid), orderBy('createdAt', 'desc'));
+    // 3. Leads - query by ownerId and sort in-memory to prevent missing composite index errors
+    const qLeads = query(collection(db, 'leads'), where('ownerId', '==', user.uid));
     const unsubLeads = onSnapshot(qLeads, (snapshot) => {
       console.log(`Leads Listener: Received ${snapshot.docs.length} docs`);
-      const lds = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Lead));
+      const lds = snapshot.docs
+        .map(d => ({ ...d.data(), id: d.id } as Lead))
+        .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
       setLeads(lds);
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'leads'));
 
-    // 4. Orders
-    const qOrders = query(collection(db, 'orders'), where('ownerId', '==', user.uid), orderBy('createdAt', 'desc'));
+    // 4. Orders - query by ownerId and sort in-memory to prevent missing composite index errors
+    const qOrders = query(collection(db, 'orders'), where('ownerId', '==', user.uid));
     const unsubOrders = onSnapshot(qOrders, (snapshot) => {
       console.log(`Orders Listener: Received ${snapshot.docs.length} docs`);
-      const ords = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Order));
+      const ords = snapshot.docs
+        .map(d => ({ ...d.data(), id: d.id } as Order))
+        .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
       setOrders(ords);
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'orders'));
 
-    // 5. Reviews
-    const qReviews = query(collection(db, 'reviews'), where('ownerId', '==', user.uid), orderBy('createdAt', 'desc'));
+    // 5. Reviews - query by ownerId and sort in-memory to prevent missing composite index errors
+    const qReviews = query(collection(db, 'reviews'), where('ownerId', '==', user.uid));
     const unsubReviews = onSnapshot(qReviews, (snapshot) => {
       console.log(`Reviews Listener: Received ${snapshot.docs.length} docs`);
-      const revs = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Review));
+      const revs = snapshot.docs
+        .map(d => ({ ...d.data(), id: d.id } as Review))
+        .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
       
       if (isFirstReviewsLoad.current) {
         isFirstReviewsLoad.current = false;
