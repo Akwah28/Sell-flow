@@ -80,6 +80,8 @@ export interface BusinessProfile {
   views?: number;
   clicksMessageMerchant?: number;
   clicksWhatsAppOrder?: number;
+  email?: string;
+  managedPassword?: string;
 }
 
 export interface Review {

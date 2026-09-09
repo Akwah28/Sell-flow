@@ -28,11 +28,16 @@ import {
   X,
   Compass,
   UserPlus,
-  KeyRound
+  KeyRound,
+  Copy,
+  EyeOff,
+  Lock,
+  ShieldCheck
 } from 'lucide-react';
 import CreateAccountModal from './CreateAccountModal';
 import { motion, AnimatePresence } from 'motion/react';
 import { sendPasswordResetEmail } from 'firebase/auth';
+import { resetMerchantPasswordDirectly } from '../utils/accountCreator';
 import { 
   BarChart, 
   Bar, 
@@ -372,6 +377,111 @@ export default function AdminDashboard() {
   const [isResetPasswordOpen, setIsResetPasswordOpen] = useState(false);
   const [resetEmailInput, setResetEmailInput] = useState('');
   const [resetEmailLoading, setResetEmailLoading] = useState(false);
+
+  // Direct Password Reset States
+  const [resetTargetBiz, setResetTargetBiz] = useState<BusinessProfile | null>(null);
+  const [directResetTab, setDirectResetTab] = useState<'direct' | 'email'>('direct');
+  const [directResetEmail, setDirectResetEmail] = useState('');
+  const [directCurrentPass, setDirectCurrentPass] = useState('');
+  const [directNewPass, setDirectNewPass] = useState('');
+  const [showDirectNewPass, setShowDirectNewPass] = useState(true);
+  const [showCurrentPass, setShowCurrentPass] = useState(false);
+  const [showModalStoredPass, setShowModalStoredPass] = useState(false);
+  const [directResetLoading, setDirectResetLoading] = useState(false);
+  const [directResetSuccess, setDirectResetSuccess] = useState<{
+    email: string;
+    newPassword: string;
+    merchantName?: string;
+    storeSlug?: string;
+  } | null>(null);
+  const [copiedCredential, setCopiedCredential] = useState<'pass' | 'all' | 'email' | null>(null);
+
+  const generatePasswordString = () => {
+    const charset = '23456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz';
+    let res = 'Flow';
+    for (let i = 0; i < 6; i++) {
+      res += charset.charAt(Math.floor(Math.random() * charset.length));
+    }
+    return res;
+  };
+
+  const handleOpenDirectReset = (biz?: BusinessProfile | null) => {
+    setResetTargetBiz(biz || null);
+    setDirectResetEmail(biz?.email || '');
+    setDirectCurrentPass(biz?.managedPassword || '');
+    setDirectNewPass(generatePasswordString());
+    setShowDirectNewPass(true);
+    setShowCurrentPass(false);
+    setDirectResetSuccess(null);
+    setCopiedCredential(null);
+    setDirectResetTab('direct');
+    setIsResetPasswordOpen(true);
+  };
+
+  const handleExecuteDirectReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanEmail = directResetEmail.trim();
+    const cleanNewPass = directNewPass.trim();
+    const cleanCurrentPass = directCurrentPass.trim();
+
+    if (!cleanEmail || !cleanNewPass) {
+      showToast('Please provide both the email address and a new password.', 'error');
+      return;
+    }
+
+    if (cleanNewPass.length < 6) {
+      showToast('New password must be at least 6 characters.', 'error');
+      return;
+    }
+
+    setDirectResetLoading(true);
+    try {
+      await resetMerchantPasswordDirectly({
+        email: cleanEmail,
+        newPassword: cleanNewPass,
+        currentPassword: cleanCurrentPass || undefined,
+        ownerId: resetTargetBiz?.ownerId
+      });
+
+      // Update local state businesses array
+      if (resetTargetBiz?.ownerId) {
+        setBusinesses(prev => prev.map(b => 
+          b.ownerId === resetTargetBiz.ownerId 
+            ? { ...b, managedPassword: cleanNewPass, email: cleanEmail }
+            : b
+        ));
+      }
+
+      setDirectResetSuccess({
+        email: cleanEmail,
+        newPassword: cleanNewPass,
+        merchantName: resetTargetBiz?.name || 'Merchant',
+        storeSlug: resetTargetBiz?.storeSlug
+      });
+
+      setSystemLogs(prev => [
+        {
+          time: new Date().toLocaleTimeString(),
+          level: 'SUCCESS',
+          msg: `Direct password reset completed for merchant "${cleanEmail}". Firebase Auth updated.`
+        },
+        ...prev
+      ]);
+
+      showToast('Password updated directly in Firebase Auth! No email or link required.', 'success');
+    } catch (err: any) {
+      console.error('Direct reset error:', err);
+      let msg = err?.message || 'Failed to update password.';
+      if (err?.code === 'auth/wrong-password' || err?.code === 'auth/invalid-credential') {
+        msg = 'Incorrect current password for this account. Please enter the original password used during setup, or use Send Reset Link.';
+      } else if (err?.code === 'auth/user-not-found') {
+        msg = 'No Firebase account was found for this email.';
+      }
+      showToast(msg, 'error');
+    } finally {
+      setDirectResetLoading(false);
+    }
+  };
 
   const handleSendResetEmail = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1390,12 +1500,12 @@ export default function AdminDashboard() {
                     </div>
                     <button
                       type="button"
-                      onClick={() => setIsResetPasswordOpen(true)}
-                      className="bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-bold px-3.5 py-2.5 rounded-xl flex items-center justify-center gap-1.5 border border-slate-700/60 transition-all shrink-0 cursor-pointer"
-                      title="Send a password reset email link to any merchant"
+                      onClick={() => handleOpenDirectReset(null)}
+                      className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 hover:text-amber-200 text-xs font-bold px-3.5 py-2.5 rounded-xl flex items-center justify-center gap-1.5 border border-amber-500/20 hover:border-amber-500/40 transition-all shrink-0 cursor-pointer shadow-sm"
+                      title="Directly reset password for any merchant account without email or link"
                     >
                       <KeyRound size={13} className="text-amber-400" />
-                      <span>Send Reset Link</span>
+                      <span>Reset Password</span>
                     </button>
                     <button
                       type="button"
@@ -1552,6 +1662,14 @@ export default function AdminDashboard() {
                                   >
                                     Preview <ExternalLink size={10} />
                                   </a>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenDirectReset(biz)}
+                                    className="text-amber-400 hover:text-amber-300 hover:underline inline-flex items-center gap-1 font-bold font-mono text-[10px] uppercase tracking-wider bg-amber-500/10 hover:bg-amber-500/20 px-2.5 py-1.5 border border-amber-500/20 hover:border-amber-500/40 rounded-lg transition-all cursor-pointer"
+                                    title="Reset merchant password directly (no email or link needed)"
+                                  >
+                                    Password <KeyRound size={10} />
+                                  </button>
                                   <button
                                     onClick={() => setEditingBusiness(biz)}
                                     className="text-purple-400 hover:text-purple-300 hover:underline inline-flex items-center gap-1 font-bold font-mono text-[10px] uppercase tracking-wider bg-purple-500/5 px-2.5 py-1.5 border border-purple-500/10 hover:border-purple-500/30 rounded-lg transition-all cursor-pointer"
@@ -2121,6 +2239,65 @@ export default function AdminDashboard() {
                 />
               </div>
 
+              {/* Account Credentials Card */}
+              <div className="p-4 bg-slate-950/80 border border-slate-800/80 rounded-xl space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-slate-300 text-xs font-bold">
+                    <Lock size={13} className="text-amber-400" />
+                    <span>Login & Password Management</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const b = editingBusiness;
+                      setEditingBusiness(null);
+                      handleOpenDirectReset(b);
+                    }}
+                    className="text-amber-400 hover:text-amber-300 text-[10px] font-bold uppercase tracking-wider bg-amber-500/10 hover:bg-amber-500/20 px-2.5 py-1 rounded-lg border border-amber-500/20 transition-all cursor-pointer flex items-center gap-1"
+                  >
+                    <KeyRound size={11} />
+                    Reset Password
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs pt-1">
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-slate-500 block">Registered Email</span>
+                    <span className="font-mono text-slate-200 text-xs truncate block">{editingBusiness.email || 'Not saved on store doc'}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-slate-500 block">Managed Password</span>
+                    <span className="font-mono text-slate-200 text-xs">
+                      {editingBusiness.managedPassword ? (
+                        <span className="flex items-center gap-1.5">
+                          <span>{showModalStoredPass ? editingBusiness.managedPassword : '••••••••'}</span>
+                          <button
+                            type="button"
+                            onClick={() => setShowModalStoredPass(!showModalStoredPass)}
+                            className="text-slate-400 hover:text-white p-0.5"
+                            title={showModalStoredPass ? "Hide password" : "Show password"}
+                          >
+                            {showModalStoredPass ? <EyeOff size={12} /> : <Eye size={12} />}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(editingBusiness.managedPassword || '');
+                              showToast('Password copied to clipboard!', 'success');
+                            }}
+                            className="text-slate-400 hover:text-white p-0.5"
+                            title="Copy password"
+                          >
+                            <Copy size={12} />
+                          </button>
+                        </span>
+                      ) : (
+                        <span className="text-slate-500 italic text-[11px]">Set via Reset Password button</span>
+                      )}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
               <div className="pt-2 border-t border-slate-800/40 flex items-center justify-between">
                 <button
                   type="button"
@@ -2165,72 +2342,333 @@ export default function AdminDashboard() {
         }}
       />
 
-      {/* Modal to Send Password Reset Email */}
+      {/* Modal to Reset Merchant Password (Directly or via Email Link) */}
       {isResetPasswordOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
           <motion.div 
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl relative"
+            className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl relative max-h-[90vh] flex flex-col"
           >
-            <div className="p-6 border-b border-slate-800 flex items-center justify-between">
+            {/* Modal Header */}
+            <div className="p-5 border-b border-slate-800 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-3">
                 <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
                   <KeyRound size={18} />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-white">Send Password Reset Link</h3>
-                  <p className="text-xs text-slate-400">Directly dispatch a reset link to any merchant</p>
+                  <h3 className="text-base font-bold text-white">Reset Merchant Password</h3>
+                  <p className="text-xs text-slate-400">Directly update credentials in Firebase Auth without email or links</p>
                 </div>
               </div>
               <button 
-                onClick={() => setIsResetPasswordOpen(false)}
+                onClick={() => {
+                  setIsResetPasswordOpen(false);
+                  setDirectResetSuccess(null);
+                }}
                 className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleSendResetEmail} className="p-6 space-y-4">
-              <p className="text-xs text-slate-300 leading-relaxed">
-                Enter the merchant's registered email address. Firebase will immediately email them a secure, 1-click password reset link so they can regain access.
-              </p>
+            <div className="p-6 space-y-5 overflow-y-auto">
+              {/* Target Business Selector or Info Card */}
+              {resetTargetBiz ? (
+                <div className="p-3.5 bg-slate-950/80 border border-slate-800/80 rounded-xl flex items-center justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-black text-white">{resetTargetBiz.name}</span>
+                      <span className="text-[10px] font-mono bg-purple-500/10 text-purple-300 border border-purple-500/20 px-1.5 py-0.5 rounded">
+                        {resetTargetBiz.storeSlug}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-400 font-mono mt-0.5 truncate">
+                      {resetTargetBiz.email || 'No email saved on store'}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setResetTargetBiz(null)}
+                    className="text-[10px] font-bold text-slate-400 hover:text-slate-200 underline cursor-pointer shrink-0"
+                  >
+                    Change Store
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+                    Select Target Merchant Store (Optional)
+                  </label>
+                  <select
+                    value={resetTargetBiz?.ownerId || ''}
+                    onChange={(e) => {
+                      const selected = businesses.find(b => b.ownerId === e.target.value);
+                      if (selected) {
+                        setResetTargetBiz(selected);
+                        setDirectResetEmail(selected.email || '');
+                        setDirectCurrentPass(selected.managedPassword || '');
+                      }
+                    }}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-amber-500 transition-colors cursor-pointer"
+                  >
+                    <option value="">-- Choose from your managed stores --</option>
+                    {businesses.map((b) => (
+                      <option key={b.ownerId} value={b.ownerId}>
+                        {b.name} ({b.storeSlug}) {b.email ? `• ${b.email}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-                  Merchant Email Address
-                </label>
-                <input 
-                  type="email"
-                  required
-                  placeholder="merchant@example.com"
-                  value={resetEmailInput}
-                  onChange={(e) => setResetEmailInput(e.target.value)}
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  spellCheck="false"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-500 transition-colors font-mono"
-                />
-              </div>
-
-              <div className="flex gap-3 pt-2">
+              {/* Mode Switch Tabs */}
+              <div className="flex rounded-xl bg-slate-950 p-1 border border-slate-800">
                 <button
                   type="button"
-                  onClick={() => setIsResetPasswordOpen(false)}
-                  className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 py-3 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                  onClick={() => setDirectResetTab('direct')}
+                  className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    directResetTab === 'direct'
+                      ? 'bg-amber-500 text-slate-950 shadow-md'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
                 >
-                  Cancel
+                  <KeyRound size={12} />
+                  <span>Direct Reset (No Email)</span>
                 </button>
                 <button
-                  type="submit"
-                  disabled={resetEmailLoading}
-                  className="flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
+                  type="button"
+                  onClick={() => setDirectResetTab('email')}
+                  className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    directResetTab === 'email'
+                      ? 'bg-slate-800 text-white shadow-md'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
                 >
-                  {resetEmailLoading ? 'Sending...' : 'Send Reset Link'}
+                  <span>Send Reset Email Link</span>
                 </button>
               </div>
-            </form>
+
+              {/* SUCCESS VIEW */}
+              {directResetSuccess && (
+                <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-xl space-y-4">
+                  <div className="flex items-center gap-2.5 text-emerald-400">
+                    <CheckCircle size={20} className="shrink-0" />
+                    <div>
+                      <h4 className="text-xs font-black uppercase tracking-wider">Password Reset Completed!</h4>
+                      <p className="text-[11px] text-emerald-300/80">Firebase Auth has been directly updated. The merchant can sign in immediately.</p>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-950/80 border border-slate-800 rounded-lg p-3 space-y-2 text-xs font-mono">
+                    <div className="flex justify-between items-center text-slate-300">
+                      <span className="text-slate-500">Email:</span>
+                      <span className="text-white font-bold">{directResetSuccess.email}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-slate-300">
+                      <span className="text-slate-500">New Password:</span>
+                      <span className="text-amber-300 font-bold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                        {directResetSuccess.newPassword}
+                      </span>
+                    </div>
+                    {directResetSuccess.storeSlug && (
+                      <div className="flex justify-between items-center text-slate-300">
+                        <span className="text-slate-500">Storefront:</span>
+                        <span className="text-purple-300">{directResetSuccess.storeSlug}.mysellflow.store</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const message = `*Store Login Credentials*\nStore: ${directResetSuccess.merchantName || 'Your Store'}\nStorefront: https://${directResetSuccess.storeSlug || 'store'}.mysellflow.store\nLogin URL: ${window.location.origin}/login\nEmail: ${directResetSuccess.email}\nPassword: ${directResetSuccess.newPassword}`;
+                        navigator.clipboard.writeText(message);
+                        setCopiedCredential('all');
+                        showToast('Full credentials copied for WhatsApp!', 'success');
+                      }}
+                      className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs py-2.5 rounded-xl uppercase tracking-wider transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <Copy size={13} />
+                      {copiedCredential === 'all' ? 'Copied!' : 'Copy WhatsApp Format'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsResetPasswordOpen(false);
+                        setDirectResetSuccess(null);
+                      }}
+                      className="px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+                    >
+                      Done
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* DIRECT RESET FORM */}
+              {!directResetSuccess && directResetTab === 'direct' && (
+                <form onSubmit={handleExecuteDirectReset} className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+                      Merchant Registered Email
+                    </label>
+                    <input 
+                      type="email"
+                      required
+                      placeholder="merchant@example.com"
+                      value={directResetEmail}
+                      onChange={(e) => setDirectResetEmail(e.target.value)}
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck="false"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-500 transition-colors font-mono"
+                    />
+                  </div>
+
+                  {/* Current / Stored Password */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+                        Current / Original Password
+                      </label>
+                      {resetTargetBiz?.managedPassword && (
+                        <span className="text-[10px] text-emerald-400 font-mono bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                          Auto-filled from saved credentials
+                        </span>
+                      )}
+                    </div>
+                    <div className="relative">
+                      <input 
+                        type={showCurrentPass ? "text" : "password"}
+                        required
+                        placeholder="Current password for verification"
+                        value={directCurrentPass}
+                        onChange={(e) => setDirectCurrentPass(e.target.value)}
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        spellCheck="false"
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 pr-10 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-500 transition-colors font-mono"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowCurrentPass(!showCurrentPass)}
+                        className="absolute right-3 top-2.5 text-slate-500 hover:text-slate-300"
+                        title={showCurrentPass ? "Hide" : "Show"}
+                      >
+                        {showCurrentPass ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-slate-500">
+                      Required by Firebase Auth to authenticate the user session and write the new password directly.
+                    </p>
+                  </div>
+
+                  {/* New Password */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+                        New Password (Min. 6 characters)
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setDirectNewPass(generatePasswordString())}
+                        className="text-[10px] text-amber-400 hover:text-amber-300 font-bold uppercase tracking-wider cursor-pointer flex items-center gap-1"
+                      >
+                        <Sparkles size={10} />
+                        Generate New
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <input 
+                        type={showDirectNewPass ? "text" : "password"}
+                        required
+                        placeholder="Enter new password"
+                        value={directNewPass}
+                        onChange={(e) => setDirectNewPass(e.target.value)}
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        spellCheck="false"
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 pr-10 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-500 transition-colors font-mono font-bold"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowDirectNewPass(!showDirectNewPass)}
+                        className="absolute right-3 top-2.5 text-slate-500 hover:text-slate-300"
+                        title={showDirectNewPass ? "Hide" : "Show"}
+                      >
+                        {showDirectNewPass ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsResetPasswordOpen(false)}
+                      className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 py-3 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={directResetLoading}
+                      className="flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2 shadow-lg shadow-amber-500/10"
+                    >
+                      {directResetLoading ? 'Updating Firebase Auth...' : 'Reset Password (Direct)'}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* EMAIL LINK RESET FORM */}
+              {!directResetSuccess && directResetTab === 'email' && (
+                <form onSubmit={handleSendResetEmail} className="space-y-4">
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    Firebase will email a secure 1-click password reset link directly to the merchant.
+                  </p>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+                      Merchant Email Address
+                    </label>
+                    <input 
+                      type="email"
+                      required
+                      placeholder="merchant@example.com"
+                      value={resetEmailInput || directResetEmail}
+                      onChange={(e) => {
+                        setResetEmailInput(e.target.value);
+                        setDirectResetEmail(e.target.value);
+                      }}
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck="false"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-500 transition-colors font-mono"
+                    />
+                  </div>
+
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsResetPasswordOpen(false)}
+                      className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 py-3 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={resetEmailLoading}
+                      className="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
+                    >
+                      {resetEmailLoading ? 'Sending...' : 'Send Reset Email Link'}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
           </motion.div>
         </div>
       )}
