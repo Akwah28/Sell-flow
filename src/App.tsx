@@ -4694,7 +4694,7 @@ const AuthScreen = ({
       case 'auth/invalid-credential':
       case 'auth/user-not-found':
       case 'auth/wrong-password':
-        return "The email or password you entered is incorrect.";
+        return "Incorrect email or password. Please check for typos, spaces, or click 'Forgot?' to reset.";
       case 'auth/email-already-in-use':
         return "This email address is already in use by another account.";
       case 'auth/weak-password':
@@ -4785,14 +4785,29 @@ const AuthScreen = ({
     e.preventDefault();
     if (!checkRateLimit()) return;
 
-    if (!email || !password) {
+    const rawEmail = email;
+    const rawPassword = password;
+    const cleanEmail = (email || '').trim();
+    const cleanPassword = (password || '').trim();
+
+    if (!cleanEmail || !cleanPassword) {
       if (showToast) showToast("Please input both email and password.", "error");
       return;
     }
 
     setLoading(true);
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      // First attempt with cleaned credentials (strips copy-paste spaces & accidental newlines)
+      try {
+        await signInWithEmailAndPassword(auth, cleanEmail, cleanPassword);
+      } catch (firstErr: any) {
+        // Fallback: If legacy account was created with spaces, try raw values before throwing
+        if (rawEmail !== cleanEmail || rawPassword !== cleanPassword) {
+          await signInWithEmailAndPassword(auth, rawEmail, rawPassword);
+        } else {
+          throw firstErr;
+        }
+      }
       // Successful login reset
       setFailedAttempts(0);
       setLockoutTime(null);
@@ -4810,24 +4825,28 @@ const AuthScreen = ({
     e.preventDefault();
     if (!checkRateLimit()) return;
 
-    if (!email || !password || !confirmPassword) {
+    const cleanEmail = (email || '').trim();
+    const cleanPassword = (password || '').trim();
+    const cleanConfirm = (confirmPassword || '').trim();
+
+    if (!cleanEmail || !cleanPassword || !cleanConfirm) {
       if (showToast) showToast("All fields are required to sign up.", "error");
       return;
     }
 
-    if (password !== confirmPassword) {
+    if (cleanPassword !== cleanConfirm) {
       if (showToast) showToast("Passwords do not match.", "error");
       return;
     }
 
-    if (password.length < 6) {
+    if (cleanPassword.length < 6) {
       if (showToast) showToast("Password needs to be at least 6 characters.", "error");
       return;
     }
 
     setLoading(true);
     try {
-      await createUserWithEmailAndPassword(auth, email, password);
+      await createUserWithEmailAndPassword(auth, cleanEmail, cleanPassword);
       setFailedAttempts(0);
       setLockoutTime(null);
       if (showToast) showToast("Account created successfully! Welcome to SellFlow.", "success");
@@ -4845,14 +4864,15 @@ const AuthScreen = ({
 
   const handleForgotPasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!resetEmail) {
+    const cleanResetEmail = (resetEmail || '').trim();
+    if (!cleanResetEmail) {
       if (showToast) showToast("Please provide your email address.", "error");
       return;
     }
     setLoading(true);
     try {
-      await sendPasswordResetEmail(auth, resetEmail);
-      if (showToast) showToast(`Instructions sent to ${resetEmail}. Check your inbox!`, "success");
+      await sendPasswordResetEmail(auth, cleanResetEmail);
+      if (showToast) showToast(`Instructions sent to ${cleanResetEmail}. Check your inbox!`, "success");
       setShowForgotPassword(false);
     } catch (error: any) {
       const msg = getFriendlyErrorMessage(error);
@@ -4970,6 +4990,9 @@ const AuthScreen = ({
                         placeholder="you@example.com" 
                         value={email} 
                         onChange={e => setEmail(e.target.value)} 
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        spellCheck="false"
                         className="w-full bg-slate-950/50 border border-slate-800 p-3 pl-9 rounded-xl text-xs font-medium text-white outline-none focus:border-sky-500 transition-colors"
                         required
                       />
@@ -4982,7 +5005,7 @@ const AuthScreen = ({
                       <button 
                         type="button" 
                         onClick={() => setShowForgotPassword(true)}
-                        className="text-[9px] font-bold text-sky-400 hover:underline hover:text-sky-300"
+                        className="text-[9px] font-bold text-sky-400 hover:underline hover:text-sky-300 cursor-pointer"
                       >
                         Forgot?
                       </button>
@@ -4994,13 +5017,16 @@ const AuthScreen = ({
                         placeholder="••••••••" 
                         value={password} 
                         onChange={e => setPassword(e.target.value)} 
-                        className="w-full bg-slate-950/50 border border-slate-800 p-3 pl-9 pr-10 rounded-xl text-xs font-medium text-white outline-none focus:border-sky-500 transition-colors"
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        spellCheck="false"
+                        className="w-full bg-slate-950/50 border border-slate-800 p-3 pl-9 pr-10 rounded-xl text-xs font-medium text-white outline-none focus:border-sky-500 transition-colors font-mono"
                         required
                       />
                       <button 
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-3 text-slate-400 hover:text-white transition-colors"
+                        className="absolute right-3 top-3 text-slate-400 hover:text-white transition-colors cursor-pointer"
                       >
                         {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
                       </button>
@@ -5026,6 +5052,9 @@ const AuthScreen = ({
                         placeholder="you@example.com" 
                         value={email} 
                         onChange={e => setEmail(e.target.value)} 
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        spellCheck="false"
                         className="w-full bg-slate-950/50 border border-slate-800 p-3 pl-9 rounded-xl text-xs font-medium text-white outline-none focus:border-sky-500 transition-colors"
                         required
                       />
@@ -5041,13 +5070,16 @@ const AuthScreen = ({
                         placeholder="Choose secure password" 
                         value={password} 
                         onChange={e => setPassword(e.target.value)} 
-                        className="w-full bg-slate-950/50 border border-slate-800 p-3 pl-9 pr-10 rounded-xl text-xs font-medium text-white outline-none focus:border-sky-500 transition-colors"
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        spellCheck="false"
+                        className="w-full bg-slate-950/50 border border-slate-800 p-3 pl-9 pr-10 rounded-xl text-xs font-medium text-white outline-none focus:border-sky-500 transition-colors font-mono"
                         required
                       />
                       <button 
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-3 text-slate-400 hover:text-white transition-colors"
+                        className="absolute right-3 top-3 text-slate-400 hover:text-white transition-colors cursor-pointer"
                       >
                         {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
                       </button>
@@ -5063,7 +5095,10 @@ const AuthScreen = ({
                         placeholder="Repeat your password" 
                         value={confirmPassword} 
                         onChange={e => setConfirmPassword(e.target.value)} 
-                        className="w-full bg-slate-950/50 border border-slate-800 p-3 pl-9 pr-10 rounded-xl text-xs font-medium text-white outline-none focus:border-sky-500 transition-colors"
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        spellCheck="false"
+                        className="w-full bg-slate-950/50 border border-slate-800 p-3 pl-9 pr-10 rounded-xl text-xs font-medium text-white outline-none focus:border-sky-500 transition-colors font-mono"
                         required
                       />
                     </div>

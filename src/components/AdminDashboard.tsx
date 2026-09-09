@@ -27,10 +27,12 @@ import {
   Check,
   X,
   Compass,
-  UserPlus
+  UserPlus,
+  KeyRound
 } from 'lucide-react';
 import CreateAccountModal from './CreateAccountModal';
 import { motion, AnimatePresence } from 'motion/react';
+import { sendPasswordResetEmail } from 'firebase/auth';
 import { 
   BarChart, 
   Bar, 
@@ -38,25 +40,25 @@ import {
   YAxis, 
   CartesianGrid, 
   Tooltip, 
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  PieChart,
-  Pie,
-  Cell
+  ResponsiveContainer, 
+  AreaChart, 
+  Area, 
+  PieChart, 
+  Pie, 
+  Cell 
 } from 'recharts';
 import { 
   collection, 
   getDocs, 
   doc, 
-  getDoc,
+  getDoc, 
   updateDoc, 
   deleteDoc, 
   query, 
   where, 
   addDoc 
 } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, auth } from '../firebase';
 import { BusinessProfile, Product, Review, Lead, Order } from '../types';
 
 // Gorgeous Demonstration Sandbox Data (Merged when Sandbox Toggle is Active)
@@ -365,6 +367,31 @@ export default function AdminDashboard() {
 
   // Modal to create accounts for other merchants/clients
   const [isCreateAccountOpen, setIsCreateAccountOpen] = useState(false);
+
+  // Quick Password Reset Link Sender
+  const [isResetPasswordOpen, setIsResetPasswordOpen] = useState(false);
+  const [resetEmailInput, setResetEmailInput] = useState('');
+  const [resetEmailLoading, setResetEmailLoading] = useState(false);
+
+  const handleSendResetEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const clean = resetEmailInput.trim();
+    if (!clean) {
+      showToast('Please enter a merchant email address.', 'error');
+      return;
+    }
+    setResetEmailLoading(true);
+    try {
+      await sendPasswordResetEmail(auth, clean);
+      showToast(`Password reset link dispatched to ${clean}!`, 'success');
+      setResetEmailInput('');
+      setIsResetPasswordOpen(false);
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to send password reset link.', 'error');
+    } finally {
+      setResetEmailLoading(false);
+    }
+  };
 
   // UTC Live Clock
   useEffect(() => {
@@ -1363,6 +1390,15 @@ export default function AdminDashboard() {
                     </div>
                     <button
                       type="button"
+                      onClick={() => setIsResetPasswordOpen(true)}
+                      className="bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-bold px-3.5 py-2.5 rounded-xl flex items-center justify-center gap-1.5 border border-slate-700/60 transition-all shrink-0 cursor-pointer"
+                      title="Send a password reset email link to any merchant"
+                    >
+                      <KeyRound size={13} className="text-amber-400" />
+                      <span>Send Reset Link</span>
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => setIsCreateAccountOpen(true)}
                       className="bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-purple-600/20 transition-all shrink-0 cursor-pointer"
                     >
@@ -2128,6 +2164,76 @@ export default function AdminDashboard() {
           fetchData(true);
         }}
       />
+
+      {/* Modal to Send Password Reset Email */}
+      {isResetPasswordOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl relative"
+          >
+            <div className="p-6 border-b border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
+                  <KeyRound size={18} />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Send Password Reset Link</h3>
+                  <p className="text-xs text-slate-400">Directly dispatch a reset link to any merchant</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsResetPasswordOpen(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSendResetEmail} className="p-6 space-y-4">
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Enter the merchant's registered email address. Firebase will immediately email them a secure, 1-click password reset link so they can regain access.
+              </p>
+
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+                  Merchant Email Address
+                </label>
+                <input 
+                  type="email"
+                  required
+                  placeholder="merchant@example.com"
+                  value={resetEmailInput}
+                  onChange={(e) => setResetEmailInput(e.target.value)}
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck="false"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-500 transition-colors font-mono"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsResetPasswordOpen(false)}
+                  className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 py-3 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={resetEmailLoading}
+                  className="flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
+                >
+                  {resetEmailLoading ? 'Sending...' : 'Send Reset Link'}
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        </div>
+      )}
 
     </div>
   );

@@ -1,5 +1,5 @@
 import { initializeApp, deleteApp } from 'firebase/app';
-import { getAuth, createUserWithEmailAndPassword, updateProfile, signOut } from 'firebase/auth';
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile, signOut } from 'firebase/auth';
 import { initializeFirestore, doc, setDoc } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { BusinessProfile } from '../types';
@@ -28,16 +28,20 @@ export async function createMerchantAccountForOther(
 ): Promise<CreatedMerchantResult> {
   const { email, password, merchantName, currency = 'USD', whatsappNumber = '' } = params;
 
-  if (!email || !password || !merchantName) {
+  const cleanEmail = (email || '').trim();
+  const cleanPassword = (password || '').trim();
+  const cleanMerchantName = (merchantName || '').trim();
+
+  if (!cleanEmail || !cleanPassword || !cleanMerchantName) {
     throw new Error('Merchant name, email, and password are required.');
   }
 
-  if (password.length < 6) {
+  if (cleanPassword.length < 6) {
     throw new Error('Password must be at least 6 characters.');
   }
 
   // Generate clean slug
-  let cleanSlug = (params.storeSlug || merchantName)
+  let cleanSlug = (params.storeSlug || cleanMerchantName)
     .toLowerCase()
     .trim()
     .replace(/[^a-z0-9_\-]/g, '')
@@ -57,24 +61,25 @@ export async function createMerchantAccountForOther(
   );
 
   try {
-    const cred = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+    // 1. Create account in Firebase Auth with cleanly trimmed credentials
+    const cred = await createUserWithEmailAndPassword(secondaryAuth, cleanEmail, cleanPassword);
     const uid = cred.user.uid;
 
     if (cred.user) {
-      await updateProfile(cred.user, { displayName: merchantName });
+      await updateProfile(cred.user, { displayName: cleanMerchantName });
     }
 
     const storefrontUrl = `https://${cleanSlug}.mysellflow.store`;
     const newBusiness: BusinessProfile = {
-      name: merchantName,
-      description: `Welcome to ${merchantName}. Browse our latest collection and contact us to order!`,
+      name: cleanMerchantName,
+      description: `Welcome to ${cleanMerchantName}. Browse our latest collection and contact us to order!`,
       currency,
-      whatsappNumber,
+      whatsappNumber: (whatsappNumber || '').trim(),
       storeSlug: cleanSlug,
       isVerified: false,
       ownerId: uid,
-      metaTitle: `${merchantName} - Official Store`,
-      metaDescription: `Discover quality items and order directly via WhatsApp from ${merchantName}.`,
+      metaTitle: `${cleanMerchantName} - Official Store`,
+      metaDescription: `Discover quality items and order directly via WhatsApp from ${cleanMerchantName}.`,
       storefrontUrl,
       subdomain: cleanSlug,
       views: 0,
@@ -82,34 +87,43 @@ export async function createMerchantAccountForOther(
       clicksWhatsAppOrder: 0
     };
 
-    // Initialize business document under the new merchant's authenticated UID
+    // 2. Initialize business document under the new merchant's authenticated UID
     try {
       await setDoc(doc(secondaryDb, 'businesses', uid), newBusiness);
     } catch (bizErr) {
       console.warn('Initial business profile write warning:', bizErr);
     }
 
-    // Initialize public slug mapping
+    // 3. Initialize public slug mapping
     try {
       await setDoc(doc(secondaryDb, 'slugs', cleanSlug), {
         ownerId: uid,
-        businessName: merchantName
+        businessName: cleanMerchantName
       });
     } catch (slugErr) {
       console.warn('Slug registry write warning:', slugErr);
     }
 
+    // 4. Verify that the newly created account credentials actually work with signIn
     await signOut(secondaryAuth);
+    try {
+      await signInWithEmailAndPassword(secondaryAuth, cleanEmail, cleanPassword);
+      console.log('Account credentials verified successfully for:', cleanEmail);
+      await signOut(secondaryAuth);
+    } catch (testAuthErr: any) {
+      console.error('Credential verification test failed:', testAuthErr);
+      throw new Error(`Account setup check failed: ${testAuthErr?.message || 'Password could not be validated.'}`);
+    }
 
     const origin = typeof window !== 'undefined' ? window.location.origin : 'https://mysellflow.store';
     return {
       uid,
-      email,
-      merchantName,
+      email: cleanEmail,
+      merchantName: cleanMerchantName,
       storeSlug: cleanSlug,
       storefrontUrl,
       loginUrl: `${origin}/login`,
-      password
+      password: cleanPassword
     };
   } finally {
     try {
