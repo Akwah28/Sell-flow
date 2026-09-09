@@ -390,6 +390,7 @@ export default function AdminDashboard() {
   const [directResetLoading, setDirectResetLoading] = useState(false);
   const [directResetSuccess, setDirectResetSuccess] = useState<{
     email: string;
+    loginEmail?: string;
     newPassword: string;
     merchantName?: string;
     storeSlug?: string;
@@ -436,27 +437,35 @@ export default function AdminDashboard() {
 
     setDirectResetLoading(true);
     try {
-      await resetMerchantPasswordDirectly({
+      const resetRes = await resetMerchantPasswordDirectly({
         email: cleanEmail,
         newPassword: cleanNewPass,
         currentPassword: cleanCurrentPass || undefined,
-        ownerId: resetTargetBiz?.ownerId
+        ownerId: resetTargetBiz?.ownerId,
+        storeSlug: resetTargetBiz?.storeSlug,
+        merchantName: resetTargetBiz?.name
       });
 
       // Update local state businesses array
       if (resetTargetBiz?.ownerId) {
         setBusinesses(prev => prev.map(b => 
           b.ownerId === resetTargetBiz.ownerId 
-            ? { ...b, managedPassword: cleanNewPass, email: cleanEmail }
+            ? { 
+                ...b, 
+                managedPassword: cleanNewPass, 
+                email: cleanEmail,
+                loginEmail: resetRes.loginEmail || b.loginEmail 
+              }
             : b
         ));
       }
 
       setDirectResetSuccess({
         email: cleanEmail,
+        loginEmail: resetRes.loginEmail,
         newPassword: cleanNewPass,
-        merchantName: resetTargetBiz?.name || 'Merchant',
-        storeSlug: resetTargetBiz?.storeSlug
+        merchantName: resetRes.storeName || resetTargetBiz?.name || 'Merchant',
+        storeSlug: resetRes.storeSlug || resetTargetBiz?.storeSlug
       });
 
       setSystemLogs(prev => [
@@ -468,15 +477,10 @@ export default function AdminDashboard() {
         ...prev
       ]);
 
-      showToast('Password updated directly in Firebase Auth! No email or link required.', 'success');
+      showToast(resetRes.message || 'Password updated directly in Firebase Auth! No email or link required.', 'success');
     } catch (err: any) {
       console.error('Direct reset error:', err);
-      let msg = err?.message || 'Failed to update password.';
-      if (err?.code === 'auth/wrong-password' || err?.code === 'auth/invalid-credential') {
-        msg = 'Incorrect current password for this account. Please enter the original password used during setup, or use Send Reset Link.';
-      } else if (err?.code === 'auth/user-not-found') {
-        msg = 'No Firebase account was found for this email.';
-      }
+      const msg = err?.message || 'Failed to update password.';
       showToast(msg, 'error');
     } finally {
       setDirectResetLoading(false);
@@ -2463,9 +2467,15 @@ export default function AdminDashboard() {
 
                   <div className="bg-slate-950/80 border border-slate-800 rounded-lg p-3 space-y-2 text-xs font-mono">
                     <div className="flex justify-between items-center text-slate-300">
-                      <span className="text-slate-500">Email:</span>
-                      <span className="text-white font-bold">{directResetSuccess.email}</span>
+                      <span className="text-slate-500">Login ID / Email:</span>
+                      <span className="text-white font-bold">{directResetSuccess.loginEmail || directResetSuccess.email}</span>
                     </div>
+                    {directResetSuccess.loginEmail && directResetSuccess.loginEmail !== directResetSuccess.email && (
+                      <div className="flex justify-between items-center text-slate-300">
+                        <span className="text-slate-500">Contact Email:</span>
+                        <span className="text-slate-400">{directResetSuccess.email}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between items-center text-slate-300">
                       <span className="text-slate-500">New Password:</span>
                       <span className="text-amber-300 font-bold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
@@ -2484,7 +2494,8 @@ export default function AdminDashboard() {
                     <button
                       type="button"
                       onClick={() => {
-                        const message = `*Store Login Credentials*\nStore: ${directResetSuccess.merchantName || 'Your Store'}\nStorefront: https://${directResetSuccess.storeSlug || 'store'}.mysellflow.store\nLogin URL: ${window.location.origin}/login\nEmail: ${directResetSuccess.email}\nPassword: ${directResetSuccess.newPassword}`;
+                        const loginId = directResetSuccess.loginEmail || directResetSuccess.email;
+                        const message = `*Store Login Credentials*\nStore: ${directResetSuccess.merchantName || 'Your Store'}\nStorefront: https://${directResetSuccess.storeSlug || 'store'}.mysellflow.store\nLogin URL: ${window.location.origin}/login\nLogin ID / Email: ${loginId}\nPassword: ${directResetSuccess.newPassword}`;
                         navigator.clipboard.writeText(message);
                         setCopiedCredential('all');
                         showToast('Full credentials copied for WhatsApp!', 'success');
@@ -2513,12 +2524,12 @@ export default function AdminDashboard() {
                 <form onSubmit={handleExecuteDirectReset} className="space-y-4">
                   <div className="space-y-1.5">
                     <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-                      Merchant Registered Email
+                      Merchant Registered Email / Store Account
                     </label>
                     <input 
-                      type="email"
+                      type="text"
                       required
-                      placeholder="merchant@example.com"
+                      placeholder="merchant@example.com or store slug"
                       value={directResetEmail}
                       onChange={(e) => setDirectResetEmail(e.target.value)}
                       autoCapitalize="none"
@@ -2532,7 +2543,7 @@ export default function AdminDashboard() {
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
                       <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-                        Current / Original Password
+                        Current Password (Optional)
                       </label>
                       {resetTargetBiz?.managedPassword && (
                         <span className="text-[10px] text-emerald-400 font-mono bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
@@ -2543,8 +2554,7 @@ export default function AdminDashboard() {
                     <div className="relative">
                       <input 
                         type={showCurrentPass ? "text" : "password"}
-                        required
-                        placeholder="Current password for verification"
+                        placeholder="Leave empty if forgotten or unknown"
                         value={directCurrentPass}
                         onChange={(e) => setDirectCurrentPass(e.target.value)}
                         autoCapitalize="none"
@@ -2562,7 +2572,7 @@ export default function AdminDashboard() {
                       </button>
                     </div>
                     <p className="text-[10px] text-slate-500">
-                      Required by Firebase Auth to authenticate the user session and write the new password directly.
+                      Optional: If left blank or unknown, the system will seamlessly reset and update credentials in Firebase Auth without sending an email or link.
                     </p>
                   </div>
 

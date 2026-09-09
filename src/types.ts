@@ -81,6 +81,7 @@ export interface BusinessProfile {
   clicksMessageMerchant?: number;
   clicksWhatsAppOrder?: number;
   email?: string;
+  loginEmail?: string;
   managedPassword?: string;
 }
 

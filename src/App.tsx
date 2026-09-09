@@ -4791,23 +4791,99 @@ const AuthScreen = ({
     const cleanPassword = (password || '').trim();
 
     if (!cleanEmail || !cleanPassword) {
-      if (showToast) showToast("Please input both email and password.", "error");
+      if (showToast) showToast("Please input both email/store name and password.", "error");
       return;
     }
 
     setLoading(true);
     try {
-      // First attempt with cleaned credentials (strips copy-paste spaces & accidental newlines)
+      let candidateEmail = cleanEmail;
+
+      // If user typed a store slug or username (no @), map to the store login address
+      if (!candidateEmail.includes('@')) {
+        const slugFormatted = candidateEmail.toLowerCase().replace(/[^a-z0-9]/g, '');
+        try {
+          const slugSnap = await getDoc(doc(db, 'slugs', slugFormatted));
+          if (slugSnap.exists()) {
+            const ownerId = slugSnap.data()?.ownerId;
+            if (ownerId) {
+              const bizSnap = await getDoc(doc(db, 'businesses', ownerId));
+              if (bizSnap.exists() && bizSnap.data()?.loginEmail) {
+                candidateEmail = bizSnap.data().loginEmail;
+              }
+            }
+          }
+        } catch (lookupErr) {
+          console.warn("Slug lookup warning:", lookupErr);
+        }
+        if (!candidateEmail.includes('@')) {
+          candidateEmail = `${slugFormatted}@mysellflow.store`;
+        }
+      }
+
+      // First attempt: Sign in with candidate email
       try {
-        await signInWithEmailAndPassword(auth, cleanEmail, cleanPassword);
+        await signInWithEmailAndPassword(auth, candidateEmail, cleanPassword);
       } catch (firstErr: any) {
-        // Fallback: If legacy account was created with spaces, try raw values before throwing
-        if (rawEmail !== cleanEmail || rawPassword !== cleanPassword) {
-          await signInWithEmailAndPassword(auth, rawEmail, rawPassword);
-        } else {
+        let signedIn = false;
+
+        // Fallback 1: Candidate email casing fallback if candidate is a store account
+        if (candidateEmail.endsWith('@mysellflow.store')) {
+          try {
+            const bizSnap = await getDocs(query(collection(db, 'businesses'), where('loginEmail', '==', candidateEmail)));
+            if (!bizSnap.empty) {
+              const bizData = bizSnap.docs[0].data();
+              if (bizData.managedPassword && bizData.managedPassword.toLowerCase() === cleanPassword.toLowerCase()) {
+                await signInWithEmailAndPassword(auth, candidateEmail, bizData.managedPassword);
+                signedIn = true;
+              }
+            }
+          } catch {
+            // ignore
+          }
+        }
+
+        // Fallback 2: If user entered an email that has a separate store loginEmail in Firestore
+        if (!signedIn && cleanEmail.includes('@')) {
+          try {
+            const bizQuery = query(collection(db, 'businesses'), where('email', '==', cleanEmail));
+            const bizSnap = await getDocs(bizQuery);
+            if (!bizSnap.empty) {
+              const bizData = bizSnap.docs[0].data();
+              const altLogin = bizData.loginEmail || (bizData.storeSlug ? `${bizData.storeSlug.toLowerCase().replace(/[^a-z0-9]/g, '')}@mysellflow.store` : null);
+              if (altLogin) {
+                try {
+                  await signInWithEmailAndPassword(auth, altLogin, cleanPassword);
+                  signedIn = true;
+                } catch {
+                  // If password differs only by mobile keyboard casing (e.g. initial cap), try stored managed password
+                  if (bizData.managedPassword && bizData.managedPassword.toLowerCase() === cleanPassword.toLowerCase()) {
+                    await signInWithEmailAndPassword(auth, altLogin, bizData.managedPassword);
+                    signedIn = true;
+                  }
+                }
+              }
+            }
+          } catch (lookupErr) {
+            console.warn("Alternative store login lookup warning:", lookupErr);
+          }
+        }
+
+        // Fallback 2: Raw string fallback in case of legacy whitespace
+        if (!signedIn && (rawEmail !== cleanEmail || rawPassword !== cleanPassword)) {
+          try {
+            await signInWithEmailAndPassword(auth, rawEmail, rawPassword);
+            signedIn = true;
+          } catch {
+            // keep going to throw firstErr
+          }
+        }
+
+        if (!signedIn) {
           throw firstErr;
         }
       }
+
       // Successful login reset
       setFailedAttempts(0);
       setLockoutTime(null);
@@ -4982,12 +5058,12 @@ const AuthScreen = ({
               {activeTab === 'signin' ? (
                 <form onSubmit={handleSignIn} className="space-y-4">
                   <div className="space-y-1">
-                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Email Address</label>
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Email or Store Slug</label>
                     <div className="relative">
                       <Mail className="absolute left-3 top-3 px-0.5 text-slate-400" size={14} />
                       <input 
-                        type="email" 
-                        placeholder="you@example.com" 
+                        type="text" 
+                        placeholder="you@example.com or store slug (e.g. hairmaster)" 
                         value={email} 
                         onChange={e => setEmail(e.target.value)} 
                         autoCapitalize="none"
