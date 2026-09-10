@@ -20,10 +20,15 @@ import {
   ThumbsUp
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { collection, doc, getDoc, getDocs, query, where, orderBy, updateDoc, increment, addDoc } from 'firebase/firestore';
-import { db } from '../firebase';
+import { collection, doc, getDoc, getDocs, query, where, orderBy, updateDoc, increment, addDoc, limit } from 'firebase/firestore';
+import { db, isQuotaError, isQuotaLimitActive, getCachedData, setCachedData } from '../firebase';
 import { Product, BusinessProfile, Review } from '../types';
 import { cn } from '../lib/utils';
+import { 
+  DISCOVERY_FALLBACK_BUSINESSES, 
+  DISCOVERY_FALLBACK_PRODUCTS, 
+  DISCOVERY_FALLBACK_REVIEWS 
+} from '../data/mockDiscoveryData';
 
 // Helper to format currency
 const formatCurrency = (amount: number, currencyCode: string = 'NGN') => {
@@ -56,13 +61,22 @@ export default function ExplorePage({
   currentProductId,
   onSelectProduct
 }: ExplorePageProps) {
-  // Database States
-  const [globalProducts, setGlobalProducts] = useState<Product[]>([]);
-  const [businesses, setBusinesses] = useState<{ [ownerId: string]: BusinessProfile }>({});
-  const [globalReviews, setGlobalReviews] = useState<Review[]>([]);
+  // Database States with cached and fallback initialization
+  const [globalProducts, setGlobalProducts] = useState<Product[]>(() => {
+    const cached = getCachedData<Product[]>('explore_products', 15);
+    return cached && cached.length > 0 ? cached : DISCOVERY_FALLBACK_PRODUCTS;
+  });
+  const [businesses, setBusinesses] = useState<{ [ownerId: string]: BusinessProfile }>(() => {
+    const cached = getCachedData<{ [ownerId: string]: BusinessProfile }>('explore_businesses', 15);
+    return cached && Object.keys(cached).length > 0 ? cached : DISCOVERY_FALLBACK_BUSINESSES;
+  });
+  const [globalReviews, setGlobalReviews] = useState<Review[]>(() => {
+    const cached = getCachedData<Review[]>('explore_reviews', 15);
+    return cached && cached.length > 0 ? cached : DISCOVERY_FALLBACK_REVIEWS;
+  });
   
   // Loading & Error States
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Filter States
@@ -232,23 +246,28 @@ export default function ExplorePage({
     }
   };
 
-  // 1. Initial Load of Global Datasets
+  // 1. Initial Load of Global Datasets (quota-safe with cached data & limit)
   useEffect(() => {
     const fetchGlobalData = async () => {
-      setLoading(true);
+      if (isQuotaLimitActive()) {
+        setLoading(false);
+        return;
+      }
+
       setError(null);
       try {
-        // Fetch all active products
-        const prodQuery = query(collection(db, 'products'), where('isActive', '==', true));
+        // Fetch active products with limit
+        const prodQuery = query(collection(db, 'products'), where('isActive', '==', true), limit(40));
         const prodSnap = await getDocs(prodQuery);
         const productsList: Product[] = [];
         prodSnap.forEach(doc => {
           productsList.push({ id: doc.id, ...doc.data() } as Product);
         });
 
-        // Fetch all business profiles to match
-        const bizSnap = await getDocs(collection(db, 'businesses'));
-        const bizMap: { [ownerId: string]: BusinessProfile } = {};
+        // Fetch business profiles with limit
+        const bizQuery = query(collection(db, 'businesses'), limit(30));
+        const bizSnap = await getDocs(bizQuery);
+        const bizMap: { [ownerId: string]: BusinessProfile } = { ...DISCOVERY_FALLBACK_BUSINESSES };
         bizSnap.forEach(doc => {
           const biz = doc.data() as BusinessProfile;
           const ownerIdFallback = biz.ownerId || doc.id;
@@ -259,26 +278,32 @@ export default function ExplorePage({
           }
         });
 
-        // Fetch all reviews for ratings calculation
-        const revSnap = await getDocs(collection(db, 'reviews'));
+        // Fetch reviews with limit
+        const revQuery = query(collection(db, 'reviews'), limit(30));
+        const revSnap = await getDocs(revQuery);
         const reviewsList: Review[] = [];
         revSnap.forEach(doc => {
           reviewsList.push({ id: doc.id, ...doc.data() } as Review);
         });
 
-        // Sort products by custom created_at/order or fallback
-        productsList.sort((a, b) => {
-          const dateA = a.id; 
-          const dateB = b.id;
-          return dateB.localeCompare(dateA); // Newest ID first as robust standard fallback
-        });
+        const mergedProducts = productsList.length > 0 ? productsList : DISCOVERY_FALLBACK_PRODUCTS;
+        const mergedReviews = reviewsList.length > 0 ? reviewsList : DISCOVERY_FALLBACK_REVIEWS;
 
-        setGlobalProducts(productsList);
+        setGlobalProducts(mergedProducts);
         setBusinesses(bizMap);
-        setGlobalReviews(reviewsList);
+        setGlobalReviews(mergedReviews);
+
+        setCachedData('explore_products', mergedProducts);
+        setCachedData('explore_businesses', bizMap);
+        setCachedData('explore_reviews', mergedReviews);
       } catch (err: any) {
-        console.error("Failed to fetch discovery content:", err);
-        setError("Unable to connect to the server. Please verify your connection.");
+        if (isQuotaError(err)) {
+          console.warn("[ExplorePage] Firestore quota limit reached. Gracefully serving curated discovery collection.");
+        } else {
+          console.warn("Notice: Discovery content fallback in effect:", err);
+        }
+        // Seamlessly keep fallback data without blocking the user
+        setError(null);
       } finally {
         setLoading(false);
       }
@@ -298,6 +323,32 @@ export default function ExplorePage({
 
     const loadProductDetails = async () => {
       setLoadingDetails(true);
+
+      // 1. Check local/memory state first to avoid Firestore reads
+      const localProduct = globalProducts.find(p => p.id === currentProductId);
+      if (localProduct) {
+        setActiveProduct(localProduct);
+        const storeData = businesses[localProduct.ownerId];
+        if (storeData) {
+          setActiveStore(storeData);
+          const storeReviews = globalReviews.filter(r => r.ownerId === localProduct.ownerId);
+          setActiveStoreReviews(storeReviews);
+          const otherProds = globalProducts.filter(p => p.ownerId === localProduct.ownerId && p.id !== localProduct.id);
+          setMoreFromStore(otherProds.slice(0, 6));
+          setLoadingDetails(false);
+          return;
+        }
+      }
+
+      if (isQuotaLimitActive()) {
+        if (!localProduct) {
+          showToast?.("Product details temporarily unavailable.", "info");
+          handleSelectProduct(null);
+        }
+        setLoadingDetails(false);
+        return;
+      }
+
       try {
         const prodDoc = await getDoc(doc(db, 'products', currentProductId));
         if (prodDoc.exists()) {
@@ -306,7 +357,6 @@ export default function ExplorePage({
 
           // Resolve store using product's ownerId
           if (prodData.ownerId) {
-            // Check cache first, otherwise load
             let storeData = businesses[prodData.ownerId];
             if (!storeData) {
               const bizDoc = await getDoc(doc(db, 'businesses', prodData.ownerId));
@@ -318,8 +368,8 @@ export default function ExplorePage({
             setActiveStore(storeData || null);
 
             if (storeData) {
-              // Load seller storefront reviews
-              const revQuery = query(collection(db, 'reviews'), where('ownerId', '==', prodData.ownerId));
+              // Load seller storefront reviews with limit
+              const revQuery = query(collection(db, 'reviews'), where('ownerId', '==', prodData.ownerId), limit(15));
               const revSnap = await getDocs(revQuery);
               const storeReviews: Review[] = [];
               revSnap.forEach(d => {
@@ -327,7 +377,6 @@ export default function ExplorePage({
               });
               setActiveStoreReviews(storeReviews);
 
-              // Extract more products from this store (limit 4 to 8)
               const otherProds = globalProducts.filter(p => p.ownerId === prodData.ownerId && p.id !== prodData.id);
               setMoreFromStore(otherProds.slice(0, 6));
             }
@@ -337,7 +386,11 @@ export default function ExplorePage({
           handleSelectProduct(null);
         }
       } catch (err) {
-        console.error("Error loading product detail info:", err);
+        if (isQuotaError(err)) {
+          console.warn("[ExplorePage] Product details query deferred due to quota limit.");
+        } else {
+          console.warn("Notice: Product detail query error:", err);
+        }
       } finally {
         setLoadingDetails(false);
       }

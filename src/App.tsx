@@ -70,7 +70,7 @@ import {
 import { cn, formatCurrency, compressImage } from './lib/utils';
 import { Product, Lead, Order, FollowUp, BusinessProfile, Review, LeadStatus, OrderStatus, ProductType, InventoryStatus } from './types';
 import { sendWhatsAppMessage } from './services/whatsappService';
-import { db, auth, OperationType, handleFirestoreError } from './firebase';
+import { db, auth, OperationType, handleFirestoreError, isQuotaError, isQuotaLimitActive } from './firebase';
 import { 
   onAuthStateChanged, 
   signInWithPopup, 
@@ -4751,13 +4751,13 @@ const AuthScreen = ({
       await signInWithPopup(auth, provider);
       if (showToast) showToast("Signed in with Google successfully!", "success");
     } catch (error: any) {
-      console.error("Google Auth error:", error);
-      const isIframe = typeof window !== 'undefined' && window.self !== window.top;
-      
-      // User closed popup or cancelled - normal user cancellation, avoid alarming toast
+      // User closed popup or cancelled - normal user action, avoid error logging or alarming toast
       if (error?.code === 'auth/popup-closed-by-user' || error?.code === 'auth/cancelled-popup-request') {
         return;
       }
+
+      console.error("Google Auth error:", error);
+      const isIframe = typeof window !== 'undefined' && window.self !== window.top;
       
       let errorMsg = "Google sign in failed. Please try again or use Email login.";
       
@@ -5367,7 +5367,11 @@ export default function App() {
         }, { merge: true }).then(() => {
           console.log("Successfully recorded global storefront website visitor view.");
         }).catch((err) => {
-          console.error("Failed to record global storefront view:", err);
+          if (isQuotaError(err)) {
+            console.warn("Global storefront visitor stat skipped (daily quota limit active).");
+          } else {
+            console.warn("Notice: Record global storefront view:", err);
+          }
         });
       }
     } else {
@@ -5382,7 +5386,11 @@ export default function App() {
           }, { merge: true }).then(() => {
             console.log("Successfully recorded landing page website visitor view.");
           }).catch((err) => {
-            console.error("Failed to record landing page view:", err);
+            if (isQuotaError(err)) {
+              console.warn("Landing page visitor stat skipped (daily quota limit active).");
+            } else {
+              console.warn("Notice: Record landing page view:", err);
+            }
           });
         }
       }
@@ -5555,8 +5563,13 @@ export default function App() {
           setIsPublicLoading(false);
         }
       }).catch((err) => {
-        console.error("Error loading storefront:", err);
-        setPublicError("Connection lookup failed. Please try again.");
+        if (isQuotaError(err)) {
+          console.warn("[App] Storefront lookup deferred due to free tier daily quota limit.");
+          setPublicError("Database daily read units quota reached. Please check back in a few minutes.");
+        } else {
+          console.warn("Notice: Storefront lookup error:", err);
+          setPublicError("Connection lookup failed. Please try again.");
+        }
         setIsPublicLoading(false);
       });
     } else {
@@ -5612,9 +5625,9 @@ export default function App() {
   useEffect(() => {
     console.log("App mounted, setting up auth listener...");
     window.onerror = (message, source, lineno, colno, error) => {
-      console.error(`RUNTIME ERROR: ${message} at ${lineno}:${colno}`, error);
       const msgStr = String(message).toLowerCase();
-      if (msgStr.includes('script error') || msgStr.includes('extension') || msgStr.includes('maps') || msgStr.includes('resizeobserver')) return;
+      if (msgStr.includes('script error') || msgStr.includes('extension') || msgStr.includes('maps') || msgStr.includes('resizeobserver') || msgStr.includes('quota') || msgStr.includes('resource-exhausted')) return;
+      console.error(`RUNTIME ERROR: ${message} at ${lineno}:${colno}`, error);
       showToast(`A runtime error occurred: ${message}. If you face issues, please refresh.`, "error");
     };
 
@@ -5643,17 +5656,42 @@ export default function App() {
     if (!user) return;
     isFirstReviewsLoad.current = true;
 
+    // Restore cached data for current user if available to prevent empty screens or quota disruption
+    try {
+      const cachedBiz = localStorage.getItem(`cached_business_${user.uid}`);
+      if (cachedBiz) setBusiness(JSON.parse(cachedBiz));
+      const cachedProds = localStorage.getItem(`cached_products_${user.uid}`);
+      if (cachedProds) setProducts(JSON.parse(cachedProds));
+      const cachedLeads = localStorage.getItem(`cached_leads_${user.uid}`);
+      if (cachedLeads) setLeads(JSON.parse(cachedLeads));
+      const cachedOrders = localStorage.getItem(`cached_orders_${user.uid}`);
+      if (cachedOrders) setOrders(JSON.parse(cachedOrders));
+      const cachedReviews = localStorage.getItem(`cached_reviews_${user.uid}`);
+      if (cachedReviews) setReviews(JSON.parse(cachedReviews));
+    } catch (e) {
+      console.warn("Notice: Error parsing user cached data:", e);
+    }
+
+    if (isQuotaLimitActive()) {
+      console.warn("[App] Firestore data sync suspended due to daily quota limit. Serving cached business data.");
+      return;
+    }
+
     // 1. Business Profile
     console.log("Setting up Firestore listeners for UID:", user.uid);
     const unsubBusiness = onSnapshot(doc(db, 'businesses', user.uid), async (snapshot) => {
       if (snapshot.exists()) {
         console.log("Business profile found in Firestore");
         const data = snapshot.data();
-        setBusiness({
+        const resolvedBiz = {
           ...INITIAL_BUSINESS,
           ...data,
           ownerId: user.uid // Ensure ownerId is correct
-        } as BusinessProfile);
+        } as BusinessProfile;
+        setBusiness(resolvedBiz);
+        try {
+          localStorage.setItem(`cached_business_${user.uid}`, JSON.stringify(resolvedBiz));
+        } catch {}
       } else {
         console.log("No business profile found, creating initial one for UID:", user.uid);
         const rawName = user.displayName || (user.email ? user.email.split('@')[0] : 'My Store');
@@ -5694,6 +5732,9 @@ export default function App() {
       console.log(`Products Listener: Received ${snapshot.docs.length} docs`);
       const prods = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Product));
       setProducts(prods);
+      try {
+        localStorage.setItem(`cached_products_${user.uid}`, JSON.stringify(prods));
+      } catch {}
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'products'));
 
     // 3. Leads
@@ -5702,6 +5743,9 @@ export default function App() {
       console.log(`Leads Listener: Received ${snapshot.docs.length} docs`);
       const lds = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Lead));
       setLeads(lds);
+      try {
+        localStorage.setItem(`cached_leads_${user.uid}`, JSON.stringify(lds));
+      } catch {}
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'leads'));
 
     // 4. Orders
@@ -5710,6 +5754,9 @@ export default function App() {
       console.log(`Orders Listener: Received ${snapshot.docs.length} docs`);
       const ords = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Order));
       setOrders(ords);
+      try {
+        localStorage.setItem(`cached_orders_${user.uid}`, JSON.stringify(ords));
+      } catch {}
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'orders'));
 
     // 5. Reviews
@@ -5743,6 +5790,9 @@ export default function App() {
       }
       
       setReviews(revs);
+      try {
+        localStorage.setItem(`cached_reviews_${user.uid}`, JSON.stringify(revs));
+      } catch {}
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'reviews'));
 
     return () => {

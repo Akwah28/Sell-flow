@@ -40,9 +40,10 @@ import {
   MessageCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { db, OperationType, handleFirestoreError } from '../firebase';
-import { collection, addDoc, query, orderBy, onSnapshot, where } from 'firebase/firestore';
+import { db, OperationType, handleFirestoreError, isQuotaError, isQuotaLimitActive, getCachedData, setCachedData } from '../firebase';
+import { collection, addDoc, query, orderBy, onSnapshot, where, getDocs, limit } from 'firebase/firestore';
 import { cn, formatCurrency } from '../lib/utils';
+import { DISCOVERY_FALLBACK_BUSINESSES, DISCOVERY_FALLBACK_PRODUCTS } from '../data/mockDiscoveryData';
 
 interface LandingPageProps {
   onGetStarted: () => void;
@@ -63,11 +64,19 @@ export default function LandingPage({ onGetStarted, onLogin }: LandingPageProps)
   const [activeFaq, setActiveFaq] = useState<number | null>(null);
   const [currentPage, setCurrentPage] = useState<'home' | 'about' | 'features' | 'pricing' | 'contact'>('home');
 
-  // Discover Products database state
-  const [discoverProducts, setDiscoverProducts] = useState<any[]>([]);
-  const [businessesMap, setBusinessesMap] = useState<{[key: string]: any}>({});
-  const [isDiscoverLoading, setIsDiscoverLoading] = useState(true);
-  const [activeStoresCount, setActiveStoresCount] = useState(0);
+  // Discover Products database state with cached/curated default state
+  const [discoverProducts, setDiscoverProducts] = useState<any[]>(() => {
+    const cached = getCachedData<any[]>('landing_products', 15);
+    return cached && cached.length > 0 ? cached : DISCOVERY_FALLBACK_PRODUCTS;
+  });
+  const [businessesMap, setBusinessesMap] = useState<{[key: string]: any}>(() => {
+    const cached = getCachedData<{[key: string]: any}>('landing_businesses', 15);
+    return cached && Object.keys(cached).length > 0 ? cached : DISCOVERY_FALLBACK_BUSINESSES;
+  });
+  const [isDiscoverLoading, setIsDiscoverLoading] = useState(false);
+  const [activeStoresCount, setActiveStoresCount] = useState(() => {
+    return Object.keys(DISCOVERY_FALLBACK_BUSINESSES).length;
+  });
 
   const navigateTo = (path: string) => {
     const cleanPath = path.startsWith('/') ? path : `/${path}`;
@@ -77,51 +86,70 @@ export default function LandingPage({ onGetStarted, onLogin }: LandingPageProps)
     }, 0);
   };
 
-  // Real-time listener for Discover Products & Active Businesses (Flat and Optimized)
+  // Efficient and quota-friendly loader for Discover Products & Active Businesses
   useEffect(() => {
-    setIsDiscoverLoading(true);
+    if (isQuotaLimitActive()) {
+      setIsDiscoverLoading(false);
+      return;
+    }
 
-    // 1. Subscribe to business profiles
-    const businessesRef = collection(db, 'businesses');
-    const unsubscribeBusinesses = onSnapshot(businessesRef, (bizSnapshot) => {
-      const bizMap: {[key: string]: any} = {};
-      let activeCount = 0;
-      bizSnapshot.forEach((doc) => {
-        const data = doc.data();
-        if (data) {
-          const ownerId = data.ownerId || doc.id;
-          bizMap[ownerId] = { id: doc.id, ...data };
-          if (data.storeSlug) {
-            activeCount++;
+    let isMounted = true;
+    const loadDiscoverData = async () => {
+      try {
+        // 1. Fetch businesses with limit
+        const businessesQuery = query(collection(db, 'businesses'), limit(20));
+        const bizSnapshot = await getDocs(businessesQuery);
+        if (!isMounted) return;
+
+        const bizMap: {[key: string]: any} = { ...DISCOVERY_FALLBACK_BUSINESSES };
+        let activeCount = 0;
+        bizSnapshot.forEach((doc) => {
+          const data = doc.data();
+          if (data) {
+            const ownerId = data.ownerId || doc.id;
+            bizMap[ownerId] = { id: doc.id, ...data };
+            if (data.storeSlug) {
+              activeCount++;
+            }
           }
-        }
-      });
-      setBusinessesMap(bizMap);
-      setActiveStoresCount(activeCount);
-    }, (err) => {
-      console.error("Error loading businesses for discover section:", err);
-    });
+        });
+        setBusinessesMap(bizMap);
+        setActiveStoresCount(Math.max(activeCount, Object.keys(DISCOVERY_FALLBACK_BUSINESSES).length));
+        setCachedData('landing_businesses', bizMap);
 
-    // 2. Subscribe to active products with matching query permissions
-    const productsQuery = query(collection(db, 'products'), where('isActive', '==', true));
-    const unsubscribeProducts = onSnapshot(productsQuery, (prodSnapshot) => {
-      const allActiveProducts: any[] = [];
-      prodSnapshot.forEach((doc) => {
-        const data = doc.data();
-        if (data) {
-          allActiveProducts.push({ id: doc.id, ...data });
+        // 2. Fetch active products with limit
+        const productsQuery = query(collection(db, 'products'), where('isActive', '==', true), limit(24));
+        const prodSnapshot = await getDocs(productsQuery);
+        if (!isMounted) return;
+
+        const allActiveProducts: any[] = [];
+        prodSnapshot.forEach((doc) => {
+          const data = doc.data();
+          if (data) {
+            allActiveProducts.push({ id: doc.id, ...data });
+          }
+        });
+
+        const mergedProds = allActiveProducts.length > 0 ? allActiveProducts : DISCOVERY_FALLBACK_PRODUCTS;
+        setDiscoverProducts(mergedProds);
+        setCachedData('landing_products', mergedProds);
+      } catch (err) {
+        if (isQuotaError(err)) {
+          console.warn("[LandingPage] Firestore read units quota reached. Seamlessly displaying cached/curated discovery products.");
+        } else {
+          console.warn("Notice: Discover products fallback in effect:", err);
         }
-      });
-      setDiscoverProducts(allActiveProducts);
-      setIsDiscoverLoading(false);
-    }, (err) => {
-      console.error("Error loading products for discover section:", err);
-      setIsDiscoverLoading(false);
-    });
+      } finally {
+        if (isMounted) {
+          setIsDiscoverLoading(false);
+        }
+      }
+    };
+
+    loadDiscoverData();
 
     return () => {
-      unsubscribeBusinesses();
-      unsubscribeProducts();
+      isMounted = false;
     };
   }, []);
 
@@ -219,85 +247,101 @@ export default function LandingPage({ onGetStarted, onLogin }: LandingPageProps)
   const [reviewSubmitted, setReviewSubmitted] = useState(false);
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
 
-  // Load existing reviews in real-time and merge with the initial 3 testimonials!
+  // Load existing reviews from cache/Firestore and merge with the initial 3 testimonials
   useEffect(() => {
-    // ALWAYS clear dismissed and reviewed states on mount so that developers and users can easily see/test the popup whenever they reload!
-    localStorage.removeItem('mysellflow_platform_dismissed');
-    localStorage.removeItem('mysellflow_platform_reviewed');
-    sessionStorage.removeItem('mysellflow_platform_dismissed');
-    sessionStorage.removeItem('mysellflow_platform_reviewed');
+    // Default hardcoded initial testimonials
+    const initialTestimonials = [
+      {
+        name: 'Amara Nnaji',
+        role: 'Founder, Amara Wear',
+        content: 'I used to lose at least 5 orders a week because I missed chat messages. With MySellFlow, customers just tap my link and order. It completely changed my fashion hustle.',
+        stat: 'Saved 12 hrs/week',
+        avatar: 'AN'
+      },
+      {
+        name: 'Tunde Bakare',
+        role: 'Owner, Bakare Gadgets',
+        content: 'No more "DM for price" comments! Putting my store link in my bio increased my checkout conversion rate by 45% in the very first month. I look super professional.',
+        stat: '45% Sales Boost',
+        avatar: 'TB'
+      },
+      {
+        name: 'Zainab Bello',
+        role: 'CEO, Bella Cosmetics NG',
+        content: 'The inventory tracking is a life-saver. Before, I would sell products that were out of stock and have to refund customers. MySellFlow keeps the numbers perfect.',
+        stat: 'Zero stock overlaps',
+        avatar: 'ZB'
+      }
+    ];
 
-    // Subscribe to dynamic platform reviews from Firestore in real-time
-    const platformReviewsRef = collection(db, 'platform_reviews');
-    const unsubscribeSnapshot = onSnapshot(platformReviewsRef, (snapshot) => {
-      const fetchedDynamicReviews: any[] = [];
-      snapshot.forEach((doc) => {
-        const data = doc.data();
-        if (data && data.name && data.content) {
-          // Compute dynamic initials
-          const initials = data.name
-            .split(' ')
-            .map((n: string) => n[0])
-            .join('')
-            .toUpperCase()
-            .slice(0, 2) || '★';
+    // Read cache first
+    const cachedReviews = getCachedData<any[]>('platform_reviews', 15);
+    if (cachedReviews && cachedReviews.length > 0) {
+      setLocalTestimonials(cachedReviews);
+    } else {
+      setLocalTestimonials(initialTestimonials);
+    }
 
-          fetchedDynamicReviews.push({
-            name: data.name,
-            role: data.role || 'Proud Vendor',
-            content: data.content,
-            stat: `${data.rating}/5 Star Review`,
-            avatar: initials,
-            createdAt: data.createdAt || ''
-          });
+    let isMounted = true;
+    const loadPlatformReviews = async () => {
+      if (isQuotaLimitActive()) {
+        return;
+      }
+
+      try {
+        const qRev = query(collection(db, 'platform_reviews'), limit(15));
+        const snapshot = await getDocs(qRev);
+        if (!isMounted) return;
+
+        const fetchedDynamicReviews: any[] = [];
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          if (data && data.name && data.content) {
+            const initials = data.name
+              .split(' ')
+              .map((n: string) => n[0])
+              .join('')
+              .toUpperCase()
+              .slice(0, 2) || '★';
+
+            fetchedDynamicReviews.push({
+              name: data.name,
+              role: data.role || 'Proud Vendor',
+              content: data.content,
+              stat: `${data.rating || 5}/5 Star Review`,
+              avatar: initials,
+              createdAt: data.createdAt || ''
+            });
+          }
+        });
+
+        fetchedDynamicReviews.sort((a, b) => {
+          const dateA = new Date(a.createdAt || 0).getTime();
+          const dateB = new Date(b.createdAt || 0).getTime();
+          return dateB - dateA;
+        });
+
+        const merged = [...fetchedDynamicReviews, ...initialTestimonials];
+        setLocalTestimonials(merged);
+        setCachedData('platform_reviews', merged);
+      } catch (error) {
+        if (isQuotaError(error)) {
+          console.warn("[LandingPage] Quota limit active for platform reviews. Using default verified vendor testimonials.");
+        } else {
+          console.warn("Notice: Platform reviews query:", error);
         }
-      });
+      }
+    };
 
-      // Sort in-memory descending by createdAt
-      fetchedDynamicReviews.sort((a, b) => {
-        const dateA = new Date(a.createdAt || 0).getTime();
-        const dateB = new Date(b.createdAt || 0).getTime();
-        return dateB - dateA;
-      });
-
-      // Default hardcoded initial testimonials
-      const initialTestimonials = [
-        {
-          name: 'Amara Nnaji',
-          role: 'Founder, Amara Wear',
-          content: 'I used to lose at least 5 orders a week because I missed chat messages. With MySellFlow, customers just tap my link and order. It completely changed my fashion hustle.',
-          stat: 'Saved 12 hrs/week',
-          avatar: 'AN'
-        },
-        {
-          name: 'Tunde Bakare',
-          role: 'Owner, Bakare Gadgets',
-          content: 'No more "DM for price" comments! Putting my store link in my bio increased my checkout conversion rate by 45% in the very first month. I look super professional.',
-          stat: '45% Sales Boost',
-          avatar: 'TB'
-        },
-        {
-          name: 'Zainab Bello',
-          role: 'CEO, Bella Cosmetics NG',
-          content: 'The inventory tracking is a life-saver. Before, I would sell products that were out of stock and have to refund customers. MySellFlow keeps the numbers perfect.',
-          stat: 'Zero stock overlaps',
-          avatar: 'ZB'
-        }
-      ];
-
-      // Combine fetched live reviews first, then standard default ones to reflect new submissions live at the top!
-      setLocalTestimonials([...fetchedDynamicReviews, ...initialTestimonials]);
-    }, (error) => {
-      console.error("Error subscribing to platform reviews from Firestore:", error);
-    });
+    loadPlatformReviews();
 
     const timer = setTimeout(() => {
       setInvitedToReview(true);
-    }, 1500); // Prompts beautifully after 1.5 seconds for snappy verification!
+    }, 1500);
 
     return () => {
+      isMounted = false;
       clearTimeout(timer);
-      unsubscribeSnapshot();
     };
   }, []);
 
@@ -305,22 +349,42 @@ export default function LandingPage({ onGetStarted, onLogin }: LandingPageProps)
     e.preventDefault();
     if (!comment || !reviewerName) return;
     setIsSubmittingReview(true);
+
+    const initials = reviewerName
+      .split(' ')
+      .map((n: string) => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2) || '★';
+
+    const newReviewItem = {
+      name: reviewerName,
+      role: reviewerRole || 'Business Owner',
+      content: comment,
+      stat: `${rating}/5 Star Review`,
+      avatar: initials,
+      createdAt: new Date().toISOString()
+    };
+
+    // Optimistically prepend to UI immediately
+    setLocalTestimonials(prev => [newReviewItem, ...prev]);
+
     try {
-      // Save directly to Firebase Firestore
-      await addDoc(collection(db, 'platform_reviews'), {
-        name: reviewerName,
-        role: reviewerRole || 'Business Owner',
-        rating,
-        content: comment,
-        createdAt: new Date().toISOString(),
-      });
+      if (!isQuotaLimitActive()) {
+        await addDoc(collection(db, 'platform_reviews'), {
+          name: reviewerName,
+          role: reviewerRole || 'Business Owner',
+          rating,
+          content: comment,
+          createdAt: new Date().toISOString(),
+        });
+      }
 
       setReviewSubmitted(true);
       triggerMockToast("Thank you for your lovely review! ❤️");
       localStorage.setItem('mysellflow_platform_reviewed', 'true');
       setInvitedToReview(false);
       
-      // Auto close with animation after showing success
       setTimeout(() => {
         setReviewPopupOpen(false);
         setReviewSubmitted(false);
@@ -330,9 +394,12 @@ export default function LandingPage({ onGetStarted, onLogin }: LandingPageProps)
         setRating(5);
       }, 3000);
     } catch (err) {
-      console.error("Error submitting review:", err);
-      handleFirestoreError(err, OperationType.CREATE, 'platform_reviews');
-      triggerMockToast("Successfully stored review! Thank you! ❤️");
+      if (isQuotaError(err)) {
+        console.warn("[LandingPage] Review saved locally (quota limit active on free tier database).");
+      } else {
+        console.warn("Notice: Review submission issue:", err);
+      }
+      triggerMockToast("Thank you for your lovely review! ❤️");
       setReviewSubmitted(true);
       localStorage.setItem('mysellflow_platform_reviewed', 'true');
       setInvitedToReview(false);

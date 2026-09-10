@@ -35,7 +35,82 @@ interface FirestoreErrorInfo {
   }
 }
 
+export function isQuotaError(err: unknown): boolean {
+  if (!err) return false;
+  const str = err instanceof Error ? err.message : String(err);
+  const code = (err as any)?.code || '';
+  return (
+    code === 'resource-exhausted' ||
+    str.includes('Quota limit exceeded') ||
+    str.includes('quota metric') ||
+    str.includes('Free daily read units') ||
+    str.includes('quota exceeded') ||
+    str.includes('Quota exceeded') ||
+    str.includes('resource-exhausted')
+  );
+}
+
+export function isQuotaLimitActive(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    const expiry = sessionStorage.getItem('mysellflow_quota_exceeded_until');
+    if (expiry && Number(expiry) > Date.now()) {
+      return true;
+    }
+  } catch {
+    // Ignore storage restrictions
+  }
+  return false;
+}
+
+export function markQuotaLimitActive(durationMinutes: number = 10) {
+  if (typeof window === 'undefined') return;
+  try {
+    sessionStorage.setItem('mysellflow_quota_exceeded_until', String(Date.now() + durationMinutes * 60 * 1000));
+  } catch {
+    // Ignore storage restrictions
+  }
+}
+
+export function getCachedData<T>(key: string, maxAgeMinutes: number = 15): T | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(`mysellflow_cache_${key}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || !parsed.timestamp || !parsed.data) return null;
+    if (Date.now() - parsed.timestamp > maxAgeMinutes * 60 * 1000) {
+      return null;
+    }
+    return parsed.data as T;
+  } catch {
+    return null;
+  }
+}
+
+export function setCachedData<T>(key: string, data: T) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(`mysellflow_cache_${key}`, JSON.stringify({
+      timestamp: Date.now(),
+      data
+    }));
+  } catch {
+    // Ignore storage quota limits
+  }
+}
+
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  if (isQuotaError(error)) {
+    markQuotaLimitActive(10);
+    console.warn(`[Firestore Free Quota Limit] Daily read/write units exceeded for ${operationType} on ${path || 'unknown'}. Switching gracefully to cached/fallback mode.`);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('firestore-connection-status', { detail: { isOffline: true, quotaExceeded: true } }));
+      window.dispatchEvent(new CustomEvent('firestore-quota-exceeded', { detail: { operationType, path } }));
+    }
+    return;
+  }
+
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
