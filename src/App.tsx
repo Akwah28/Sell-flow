@@ -45,7 +45,10 @@ import {
   Check,
   X,
   Loader2,
-  UserPlus
+  UserPlus,
+  Database,
+  Zap,
+  AlertTriangle
 } from 'lucide-react';
 import CreateAccountModal from './components/CreateAccountModal';
 import { motion, AnimatePresence, animate } from 'framer-motion';
@@ -791,7 +794,7 @@ const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message, confirmText 
 
 const Sidebar = ({ activePage, setActivePage, lowStockCount = 0, unseenReviewsCount = 0 }: { activePage: string, setActivePage: (p: string) => void, lowStockCount?: number, unseenReviewsCount?: number }) => {
   const menuItems = [
-    { id: 'dashboard', label: 'Summary', icon: LayoutDashboard },
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'products', label: 'Products', icon: ShoppingBag },
     { id: 'leads', label: 'Leads', icon: Users },
     { id: 'followups', label: 'Follow-ups', icon: Clock },
@@ -984,6 +987,105 @@ const parseDate = (val: any): Date | null => {
   }
   const d = new Date(val);
   return isNaN(d.getTime()) ? null : d;
+};
+
+const QuotaNoticeBanner = ({ onRetrySync }: { onRetrySync: () => void }) => {
+  const [isDismissed, setIsDismissed] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
+
+  const upgradeUrl = "https://console.firebase.google.com/project/gen-lang-client-0101119593/firestore/databases/ai-studio-b528e24a-438a-496b-a8b1-cd1844a59c0c/data?openUpgradeDialog=true";
+
+  const handleRetry = async () => {
+    setIsRetrying(true);
+    try {
+      await onRetrySync();
+    } finally {
+      setTimeout(() => setIsRetrying(false), 800);
+    }
+  };
+
+  if (isDismissed) {
+    return (
+      <div className="bg-amber-50 border border-amber-200/90 rounded-2xl px-4 py-3 flex items-center justify-between text-xs text-amber-900 shadow-sm mb-6">
+        <div className="flex items-center gap-2.5">
+          <Database size={16} className="text-amber-600 shrink-0" />
+          <span className="font-bold">Offline & Local Mode Active (Firestore Daily Free Read Quota Reached)</span>
+        </div>
+        <button 
+          onClick={() => setIsDismissed(false)}
+          className="underline font-bold text-amber-900 hover:text-amber-700 text-xs transition-colors"
+        >
+          View Details & Upgrade ↗
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative overflow-hidden rounded-2xl border border-amber-300/80 bg-gradient-to-br from-amber-50 via-orange-50/60 to-amber-50 p-5 sm:p-6 shadow-sm mb-6">
+      <div className="flex flex-col md:flex-row items-start gap-4">
+        <div className="w-11 h-11 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-700 shrink-0">
+          <Database size={24} className="text-amber-700" />
+        </div>
+
+        <div className="flex-1 space-y-2.5">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-200/90 text-amber-950">
+                Firestore Free Tier (Spark Plan)
+              </span>
+              <h3 className="text-base font-black text-slate-900 tracking-tight">
+                Daily Read Quota Exceeded
+              </h3>
+            </div>
+            <button
+              onClick={() => setIsDismissed(true)}
+              className="text-xs text-slate-400 hover:text-slate-600 font-semibold transition-colors"
+            >
+              Minimize
+            </button>
+          </div>
+
+          <p className="text-xs sm:text-sm text-slate-600 leading-relaxed max-w-4xl">
+            This database is on Google Firebase's free Spark plan, which provides 50,000 free read operations per day. 
+            <strong className="font-semibold text-slate-800"> Your dashboard is fully operational in Local & Offline Cache Mode</strong>: 
+            you can create products, manage leads, update settings, and review data without losing your work. Free reads reset automatically every day at midnight Pacific Time (00:00 UTC).
+          </p>
+
+          <div className="flex items-center gap-3 pt-1 flex-wrap">
+            <a
+              href={upgradeUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition-all shadow-sm shadow-amber-600/20 active:scale-95 cursor-pointer"
+            >
+              <Zap size={14} />
+              <span>Enable Billing / Upgrade in Firebase Console</span>
+              <ExternalLink size={13} className="opacity-80" />
+            </a>
+
+            <button
+              onClick={handleRetry}
+              disabled={isRetrying}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold transition-all active:scale-95 cursor-pointer shadow-sm"
+            >
+              <RefreshCw size={13} className={cn("text-slate-500", isRetrying && "animate-spin")} />
+              <span>{isRetrying ? "Testing Connection..." : "Retry Cloud Sync"}</span>
+            </button>
+
+            <a
+              href="https://firebase.google.com/pricing#cloud-firestore"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs font-semibold text-slate-500 hover:text-slate-800 underline transition-colors px-1"
+            >
+              Learn about Firestore Quota Limits ↗
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 const Dashboard = ({ 
@@ -4750,6 +4852,9 @@ const AuthScreen = ({
       
       await signInWithPopup(auth, provider);
       if (showToast) showToast("Signed in with Google successfully!", "success");
+      if (onBackToLanding) onBackToLanding();
+      window.history.pushState(null, '', '/');
+      window.dispatchEvent(new Event('pushstate_changed'));
     } catch (error: any) {
       // User closed popup or cancelled - normal user action, avoid error logging or alarming toast
       if (error?.code === 'auth/popup-closed-by-user' || error?.code === 'auth/cancelled-popup-request') {
@@ -4797,6 +4902,9 @@ const AuthScreen = ({
       setFailedAttempts(0);
       setLockoutTime(null);
       if (showToast) showToast("Signed in successfully!", "success");
+      if (onBackToLanding) onBackToLanding();
+      window.history.pushState(null, '', '/');
+      window.dispatchEvent(new Event('pushstate_changed'));
     } catch (error: any) {
       handleFailedAttempt();
       const msg = getFriendlyErrorMessage(error);
@@ -5429,6 +5537,28 @@ export default function App() {
   const [orders, setOrders] = useState<Order[]>(INITIAL_ORDERS);
   const [reviews, setReviews] = useState<Review[]>(INITIAL_REVIEWS);
   const [unseenReviewsCount, setUnseenReviewsCount] = useState(0);
+  const [isQuotaMode, setIsQuotaMode] = useState(() => isQuotaLimitActive());
+  const [syncTrigger, setSyncTrigger] = useState(0);
+
+  useEffect(() => {
+    const handleQuota = () => setIsQuotaMode(true);
+    window.addEventListener('firestore-quota-exceeded', handleQuota);
+    window.addEventListener('firestore-connection-status', handleQuota);
+    return () => {
+      window.removeEventListener('firestore-quota-exceeded', handleQuota);
+      window.removeEventListener('firestore-connection-status', handleQuota);
+    };
+  }, []);
+
+  const handleRetrySync = () => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('firestore_quota_limit_active_until');
+    }
+    setIsQuotaMode(false);
+    setSyncTrigger(prev => prev + 1);
+    showToast("Testing cloud connection...", "info");
+  };
+
   const isFirstReviewsLoad = React.useRef(true);
   const activePageRef = React.useRef(activePage);
   const updatingReviewIds = React.useRef<Set<string>>(new Set());
@@ -5644,6 +5774,9 @@ export default function App() {
       console.log("Auth state changed - User:", currentUser?.uid || "None", "Verified:", currentUser?.emailVerified);
       if (!currentUser) {
         localStorage.removeItem('bypass_email_verification');
+      } else {
+        setShowAuth(false);
+        setActivePage('dashboard');
       }
       setUser(currentUser);
       setIsLoading(false);
@@ -5651,15 +5784,30 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
+  // Auto-dismiss auth routes when user is authenticated
+  useEffect(() => {
+    if (user) {
+      setShowAuth(false);
+      const p = (currentPath || '').toLowerCase().trim();
+      if (['login', 'signin', 'signup', 'register', 'auth', 'verification'].includes(p)) {
+        pushRoute('/');
+      }
+    }
+  }, [user, currentPath]);
+
   // Data Persistence Listeners
   useEffect(() => {
     if (!user) return;
     isFirstReviewsLoad.current = true;
 
     // Restore cached data for current user if available to prevent empty screens or quota disruption
+    let cachedBizFound = false;
     try {
       const cachedBiz = localStorage.getItem(`cached_business_${user.uid}`);
-      if (cachedBiz) setBusiness(JSON.parse(cachedBiz));
+      if (cachedBiz) {
+        setBusiness(JSON.parse(cachedBiz));
+        cachedBizFound = true;
+      }
       const cachedProds = localStorage.getItem(`cached_products_${user.uid}`);
       if (cachedProds) setProducts(JSON.parse(cachedProds));
       const cachedLeads = localStorage.getItem(`cached_leads_${user.uid}`);
@@ -5672,128 +5820,180 @@ export default function App() {
       console.warn("Notice: Error parsing user cached data:", e);
     }
 
-    if (isQuotaLimitActive()) {
-      console.warn("[App] Firestore data sync suspended due to daily quota limit. Serving cached business data.");
-      return;
+    // Default fallback so newly registered user or user with empty cache NEVER has empty/blank dashboard
+    if (!cachedBizFound) {
+      const rawName = user.displayName || (user.email ? user.email.split('@')[0] : 'My Store');
+      const cleanBase = rawName.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 15) || 'shop';
+      const uidSuffix = user.uid.slice(0, 5).toLowerCase().replace(/[^a-z0-9]/g, '') || 'store';
+      const initialSlug = `${cleanBase}-${uidSuffix}`;
+
+      const fallbackBiz: BusinessProfile = {
+        ...INITIAL_BUSINESS,
+        name: rawName,
+        ownerId: user.uid,
+        storeSlug: initialSlug,
+        storefrontUrl: `https://${initialSlug}.mysellflow.store`,
+        subdomain: `${initialSlug}.mysellflow.store`
+      };
+      setBusiness(fallbackBiz);
     }
 
-    // 1. Business Profile
-    console.log("Setting up Firestore listeners for UID:", user.uid);
-    const unsubBusiness = onSnapshot(doc(db, 'businesses', user.uid), async (snapshot) => {
-      if (snapshot.exists()) {
-        console.log("Business profile found in Firestore");
-        const data = snapshot.data();
-        const resolvedBiz = {
-          ...INITIAL_BUSINESS,
-          ...data,
-          ownerId: user.uid // Ensure ownerId is correct
-        } as BusinessProfile;
-        setBusiness(resolvedBiz);
-        try {
-          localStorage.setItem(`cached_business_${user.uid}`, JSON.stringify(resolvedBiz));
-        } catch {}
-      } else {
-        console.log("No business profile found, creating initial one for UID:", user.uid);
-        const rawName = user.displayName || (user.email ? user.email.split('@')[0] : 'My Store');
-        const cleanBase = rawName.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 15) || 'shop';
-        const uidSuffix = user.uid.slice(0, 5).toLowerCase().replace(/[^a-z0-9]/g, '') || 'store';
-        const initialSlug = `${cleanBase}-${uidSuffix}`;
+    if (isQuotaLimitActive()) {
+      setIsQuotaMode(true);
+      console.warn("[App] Firestore daily quota active. App running seamlessly in offline & local cache mode.");
+    }
 
-        const newBusiness: BusinessProfile = {
-          ...INITIAL_BUSINESS,
-          name: rawName,
-          ownerId: user.uid,
-          storeSlug: initialSlug,
-          storefrontUrl: `https://${initialSlug}.mysellflow.store`,
-          subdomain: `${initialSlug}.mysellflow.store`
-        };
+    let unsubBusiness = () => {};
+    let unsubProducts = () => {};
+    let unsubLeads = () => {};
+    let unsubOrders = () => {};
+    let unsubReviews = () => {};
 
-        try {
-          await setDoc(doc(db, 'slugs', initialSlug), {
-            ownerId: user.uid,
-            businessName: newBusiness.name
-          });
-        } catch (e) {
-          console.warn("Initial slug map write error:", e);
-        }
-
-        try {
-          await setDoc(doc(db, 'businesses', user.uid), newBusiness);
-          console.log("Initial business profile created successfully");
-        } catch (e) {
-          handleFirestoreError(e, OperationType.WRITE, 'businesses');
-        }
-      }
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'businesses'));
-
-    // 2. Products
-    const qProducts = query(collection(db, 'products'), where('ownerId', '==', user.uid));
-    const unsubProducts = onSnapshot(qProducts, (snapshot) => {
-      console.log(`Products Listener: Received ${snapshot.docs.length} docs`);
-      const prods = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Product));
-      setProducts(prods);
-      try {
-        localStorage.setItem(`cached_products_${user.uid}`, JSON.stringify(prods));
-      } catch {}
-    }, (error) => handleFirestoreError(error, OperationType.LIST, 'products'));
-
-    // 3. Leads
-    const qLeads = query(collection(db, 'leads'), where('ownerId', '==', user.uid), orderBy('createdAt', 'desc'));
-    const unsubLeads = onSnapshot(qLeads, (snapshot) => {
-      console.log(`Leads Listener: Received ${snapshot.docs.length} docs`);
-      const lds = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Lead));
-      setLeads(lds);
-      try {
-        localStorage.setItem(`cached_leads_${user.uid}`, JSON.stringify(lds));
-      } catch {}
-    }, (error) => handleFirestoreError(error, OperationType.LIST, 'leads'));
-
-    // 4. Orders
-    const qOrders = query(collection(db, 'orders'), where('ownerId', '==', user.uid), orderBy('createdAt', 'desc'));
-    const unsubOrders = onSnapshot(qOrders, (snapshot) => {
-      console.log(`Orders Listener: Received ${snapshot.docs.length} docs`);
-      const ords = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Order));
-      setOrders(ords);
-      try {
-        localStorage.setItem(`cached_orders_${user.uid}`, JSON.stringify(ords));
-      } catch {}
-    }, (error) => handleFirestoreError(error, OperationType.LIST, 'orders'));
-
-    // 5. Reviews
-    const qReviews = query(collection(db, 'reviews'), where('ownerId', '==', user.uid), orderBy('createdAt', 'desc'));
-    const unsubReviews = onSnapshot(qReviews, (snapshot) => {
-      console.log(`Reviews Listener: Received ${snapshot.docs.length} docs`);
-      const revs = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Review));
-      
-      if (isFirstReviewsLoad.current) {
-        isFirstReviewsLoad.current = false;
-        const unreadCount = revs.filter(r => !r.isRead).length;
-        if (activePageRef.current !== 'reviews') {
-          setUnseenReviewsCount(unreadCount);
+    try {
+      // 1. Business Profile
+      unsubBusiness = onSnapshot(doc(db, 'businesses', user.uid), async (snapshot) => {
+        if (snapshot.exists()) {
+          const data = snapshot.data();
+          const resolvedBiz = {
+            ...INITIAL_BUSINESS,
+            ...data,
+            ownerId: user.uid
+          } as BusinessProfile;
+          setBusiness(resolvedBiz);
+          try {
+            localStorage.setItem(`cached_business_${user.uid}`, JSON.stringify(resolvedBiz));
+          } catch {}
         } else {
-          setUnseenReviewsCount(0);
-          const unread = revs.filter(r => !r.isRead);
-          markReviewsAsReadRef.current(unread);
-        }
-      } else {
-        snapshot.docChanges().forEach((change) => {
-          if (change.type === 'added') {
-            const r = { ...change.doc.data() as Review, id: change.doc.id };
-            showToast(`New ${r.rating}-star review from ${r.customerName || 'a customer'}!`, "info");
-            if (activePageRef.current !== 'reviews') {
-              setUnseenReviewsCount(prev => prev + 1);
+          const rawName = user.displayName || (user.email ? user.email.split('@')[0] : 'My Store');
+          const cleanBase = rawName.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 15) || 'shop';
+          const uidSuffix = user.uid.slice(0, 5).toLowerCase().replace(/[^a-z0-9]/g, '') || 'store';
+          const initialSlug = `${cleanBase}-${uidSuffix}`;
+
+          const newBusiness: BusinessProfile = {
+            ...INITIAL_BUSINESS,
+            name: rawName,
+            ownerId: user.uid,
+            storeSlug: initialSlug,
+            storefrontUrl: `https://${initialSlug}.mysellflow.store`,
+            subdomain: `${initialSlug}.mysellflow.store`
+          };
+
+          try {
+            await setDoc(doc(db, 'slugs', initialSlug), {
+              ownerId: user.uid,
+              businessName: newBusiness.name
+            });
+          } catch (e) {
+            console.warn("Initial slug map write error:", e);
+          }
+
+          try {
+            await setDoc(doc(db, 'businesses', user.uid), newBusiness);
+          } catch (e) {
+            if (isQuotaError(e)) {
+              setIsQuotaMode(true);
             } else {
-              markReviewsAsReadRef.current([r]);
+              handleFirestoreError(e, OperationType.WRITE, 'businesses');
             }
           }
-        });
-      }
-      
-      setReviews(revs);
-      try {
-        localStorage.setItem(`cached_reviews_${user.uid}`, JSON.stringify(revs));
-      } catch {}
-    }, (error) => handleFirestoreError(error, OperationType.LIST, 'reviews'));
+        }
+      }, (error) => {
+        if (isQuotaError(error)) {
+          setIsQuotaMode(true);
+        } else {
+          handleFirestoreError(error, OperationType.GET, 'businesses');
+        }
+      });
+
+      // 2. Products
+      const qProducts = query(collection(db, 'products'), where('ownerId', '==', user.uid));
+      unsubProducts = onSnapshot(qProducts, (snapshot) => {
+        const prods = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Product));
+        setProducts(prods);
+        try {
+          localStorage.setItem(`cached_products_${user.uid}`, JSON.stringify(prods));
+        } catch {}
+      }, (error) => {
+        if (isQuotaError(error)) {
+          setIsQuotaMode(true);
+        } else {
+          handleFirestoreError(error, OperationType.LIST, 'products');
+        }
+      });
+
+      // 3. Leads
+      const qLeads = query(collection(db, 'leads'), where('ownerId', '==', user.uid), orderBy('createdAt', 'desc'));
+      unsubLeads = onSnapshot(qLeads, (snapshot) => {
+        const lds = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Lead));
+        setLeads(lds);
+        try {
+          localStorage.setItem(`cached_leads_${user.uid}`, JSON.stringify(lds));
+        } catch {}
+      }, (error) => {
+        if (isQuotaError(error)) {
+          setIsQuotaMode(true);
+        } else {
+          handleFirestoreError(error, OperationType.LIST, 'leads');
+        }
+      });
+
+      // 4. Orders
+      const qOrders = query(collection(db, 'orders'), where('ownerId', '==', user.uid), orderBy('createdAt', 'desc'));
+      unsubOrders = onSnapshot(qOrders, (snapshot) => {
+        const ords = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Order));
+        setOrders(ords);
+        try {
+          localStorage.setItem(`cached_orders_${user.uid}`, JSON.stringify(ords));
+        } catch {}
+      }, (error) => {
+        if (isQuotaError(error)) {
+          setIsQuotaMode(true);
+        } else {
+          handleFirestoreError(error, OperationType.LIST, 'orders');
+        }
+      });
+
+      // 5. Reviews
+      const qReviews = query(collection(db, 'reviews'), where('ownerId', '==', user.uid), orderBy('createdAt', 'desc'));
+      unsubReviews = onSnapshot(qReviews, (snapshot) => {
+        const revs = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Review));
+        if (isFirstReviewsLoad.current) {
+          isFirstReviewsLoad.current = false;
+          const unreadCount = revs.filter(r => !r.isRead).length;
+          if (activePageRef.current !== 'reviews') {
+            setUnseenReviewsCount(unreadCount);
+          } else {
+            setUnseenReviewsCount(0);
+            const unread = revs.filter(r => !r.isRead);
+            markReviewsAsReadRef.current(unread);
+          }
+        } else {
+          snapshot.docChanges().forEach((change) => {
+            if (change.type === 'added') {
+              const r = { ...change.doc.data() as Review, id: change.doc.id };
+              showToast(`New ${r.rating}-star review from ${r.customerName || 'a customer'}!`, "info");
+              if (activePageRef.current !== 'reviews') {
+                setUnseenReviewsCount(prev => prev + 1);
+              } else {
+                markReviewsAsReadRef.current([r]);
+              }
+            }
+          });
+        }
+        setReviews(revs);
+        try {
+          localStorage.setItem(`cached_reviews_${user.uid}`, JSON.stringify(revs));
+        } catch {}
+      }, (error) => {
+        if (isQuotaError(error)) {
+          setIsQuotaMode(true);
+        } else {
+          handleFirestoreError(error, OperationType.LIST, 'reviews');
+        }
+      });
+    } catch (err) {
+      console.warn("Notice: Error initializing Firestore listeners:", err);
+    }
 
     return () => {
       unsubBusiness();
@@ -5802,7 +6002,7 @@ export default function App() {
       unsubOrders();
       unsubReviews();
     };
-  }, [user]);
+  }, [user, syncTrigger]);
 
   // Track activePage and reset unseen review count when on reviews page
   useEffect(() => {
@@ -5880,11 +6080,17 @@ export default function App() {
     if (!user) return;
     
     if ('id' in productData && productData.id) {
-      // Update
+      // Optimistic update
+      const updatedProduct = productData as Product;
+      setProducts(prev => {
+        const next = prev.map(p => p.id === updatedProduct.id ? updatedProduct : p);
+        try { localStorage.setItem(`cached_products_${user.uid}`, JSON.stringify(next)); } catch {}
+        return next;
+      });
+
       const { id, ...rest } = productData;
       
       // Sanitize fields to avoid undefined errors in Firestore.
-      // For updates, use deleteField() for any key with an undefined value so it gets removed from the document.
       const sanitizedUpdate: Record<string, any> = {};
       Object.entries(rest).forEach(([key, value]) => {
         if (value === undefined) {
@@ -5901,12 +6107,29 @@ export default function App() {
         });
         showToast(`"${productData.name}" has been updated.`, "success");
       } catch (e) {
-        handleFirestoreError(e, OperationType.UPDATE, 'products');
+        if (isQuotaError(e)) {
+          setIsQuotaMode(true);
+          showToast(`"${productData.name}" saved locally on device (cloud sync paused due to daily quota).`, "info");
+        } else {
+          handleFirestoreError(e, OperationType.UPDATE, 'products');
+        }
       }
     } else {
-      // Create
-      // Sanitize fields to avoid undefined errors in Firestore.
-      // For creation, omit any key with an undefined value.
+      // Optimistic create
+      const tempId = `prod_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+      const localNewProd: Product = {
+        ...(productData as any),
+        id: tempId,
+        ownerId: user.uid,
+        createdAt: new Date().toISOString(),
+        isActive: true
+      };
+      setProducts(prev => {
+        const next = [localNewProd, ...prev];
+        try { localStorage.setItem(`cached_products_${user.uid}`, JSON.stringify(next)); } catch {}
+        return next;
+      });
+
       const sanitizedCreate: Record<string, any> = {};
       Object.entries(productData).forEach(([key, value]) => {
         if (value !== undefined) {
@@ -5921,10 +6144,16 @@ export default function App() {
         isActive: true
       };
       try {
-        await addDoc(collection(db, 'products'), newProduct);
+        const docRef = await addDoc(collection(db, 'products'), newProduct);
+        setProducts(prev => prev.map(p => p.id === tempId ? { ...p, id: docRef.id } : p));
         showToast(`"${productData.name}" has been published to your storefront.`, "success");
       } catch (e) {
-        handleFirestoreError(e, OperationType.CREATE, 'products');
+        if (isQuotaError(e)) {
+          setIsQuotaMode(true);
+          showToast(`"${productData.name}" saved locally on device (cloud sync paused due to daily quota).`, "info");
+        } else {
+          handleFirestoreError(e, OperationType.CREATE, 'products');
+        }
       }
     }
     setEditingProduct(null);
@@ -6010,13 +6239,41 @@ export default function App() {
       if (itemType === 'product') {
         const prod = products.find(p => p.id === itemId);
         const name = prod?.name || 'Product';
-        await deleteDoc(doc(db, 'products', itemId));
-        showToast(`"${name}" has been deleted successfully.`, "success");
+        setProducts(prev => {
+          const next = prev.filter(p => p.id !== itemId);
+          try { localStorage.setItem(`cached_products_${user.uid}`, JSON.stringify(next)); } catch {}
+          return next;
+        });
+        try {
+          await deleteDoc(doc(db, 'products', itemId));
+          showToast(`"${name}" has been deleted successfully.`, "success");
+        } catch (err) {
+          if (isQuotaError(err)) {
+            setIsQuotaMode(true);
+            showToast(`"${name}" removed locally (cloud sync paused due to daily quota).`, "info");
+          } else {
+            throw err;
+          }
+        }
       } else if (itemType === 'lead') {
         const leadItem = leads.find(l => l.id === itemId);
         const name = leadItem?.name || 'Lead';
-        await deleteDoc(doc(db, 'leads', itemId));
-        showToast(`Lead "${name}" has been deleted successfully.`, "success");
+        setLeads(prev => {
+          const next = prev.filter(l => l.id !== itemId);
+          try { localStorage.setItem(`cached_leads_${user.uid}`, JSON.stringify(next)); } catch {}
+          return next;
+        });
+        try {
+          await deleteDoc(doc(db, 'leads', itemId));
+          showToast(`Lead "${name}" has been deleted successfully.`, "success");
+        } catch (err) {
+          if (isQuotaError(err)) {
+            setIsQuotaMode(true);
+            showToast(`Lead "${name}" removed locally (cloud sync paused due to daily quota).`, "info");
+          } else {
+            throw err;
+          }
+        }
       }
     } catch (e) {
       handleFirestoreError(e, OperationType.DELETE, itemType === 'product' ? 'products' : 'leads');
@@ -6132,15 +6389,32 @@ export default function App() {
       updatedBusiness.storefrontUrl = `https://${slug}.mysellflow.store`;
       updatedBusiness.subdomain = `${slug}.mysellflow.store`;
 
-      await setDoc(doc(db, 'slugs', slug), {
-        ownerId: user.uid,
-        businessName: updatedBusiness.name
-      });
+      // Update state and local cache immediately
+      setBusiness(updatedBusiness);
+      try {
+        localStorage.setItem(`cached_business_${user.uid}`, JSON.stringify(updatedBusiness));
+      } catch {}
+
+      try {
+        await setDoc(doc(db, 'slugs', slug), {
+          ownerId: user.uid,
+          businessName: updatedBusiness.name
+        });
+      } catch (err) {
+        if (!isQuotaError(err)) {
+          console.warn("Notice: Slug document save deferred:", err);
+        }
+      }
       
       await setDoc(doc(db, 'businesses', user.uid), updatedBusiness);
       showToast("Settings saved successfully!", "success");
     } catch (e) {
-      handleFirestoreError(e, OperationType.WRITE, 'businesses');
+      if (isQuotaError(e)) {
+        setIsQuotaMode(true);
+        showToast("Settings saved locally on device (cloud sync paused due to daily quota).", "info");
+      } else {
+        handleFirestoreError(e, OperationType.WRITE, 'businesses');
+      }
     }
   };
 
@@ -6361,7 +6635,7 @@ export default function App() {
 
   // Email verification requirement removed per user request:
   // All accounts (Google and Email/Password) have immediate full access to their dashboard.
-  if (typeof window !== 'undefined' && window.location.pathname === '/verification') {
+  if (typeof window !== 'undefined' && ['/verification', '/login', '/signin', '/signup', '/register', '/auth'].includes(window.location.pathname)) {
     window.history.replaceState(null, '', '/');
   }
 
@@ -6484,6 +6758,9 @@ export default function App() {
         />
         
         <div className="flex-1 p-4 md:p-8 pt-20 md:pt-24 max-w-7xl mx-auto w-full">
+          {isQuotaMode && (
+            <QuotaNoticeBanner onRetrySync={handleRetrySync} />
+          )}
           {renderPage()}
         </div>
 
