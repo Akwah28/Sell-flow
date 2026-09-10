@@ -4694,7 +4694,7 @@ const AuthScreen = ({
       case 'auth/invalid-credential':
       case 'auth/user-not-found':
       case 'auth/wrong-password':
-        return "Incorrect email or password. Please check for typos, spaces, or click 'Forgot?' to reset.";
+        return "The email or password you entered is incorrect.";
       case 'auth/email-already-in-use':
         return "This email address is already in use by another account.";
       case 'auth/weak-password':
@@ -4785,105 +4785,14 @@ const AuthScreen = ({
     e.preventDefault();
     if (!checkRateLimit()) return;
 
-    const rawEmail = email;
-    const rawPassword = password;
-    const cleanEmail = (email || '').trim();
-    const cleanPassword = (password || '').trim();
-
-    if (!cleanEmail || !cleanPassword) {
-      if (showToast) showToast("Please input both email/store name and password.", "error");
+    if (!email || !password) {
+      if (showToast) showToast("Please input both email and password.", "error");
       return;
     }
 
     setLoading(true);
     try {
-      let candidateEmail = cleanEmail;
-
-      // If user typed a store slug or username (no @), map to the store login address
-      if (!candidateEmail.includes('@')) {
-        const slugFormatted = candidateEmail.toLowerCase().replace(/[^a-z0-9]/g, '');
-        try {
-          const slugSnap = await getDoc(doc(db, 'slugs', slugFormatted));
-          if (slugSnap.exists()) {
-            const ownerId = slugSnap.data()?.ownerId;
-            if (ownerId) {
-              const bizSnap = await getDoc(doc(db, 'businesses', ownerId));
-              if (bizSnap.exists() && bizSnap.data()?.loginEmail) {
-                candidateEmail = bizSnap.data().loginEmail;
-              }
-            }
-          }
-        } catch (lookupErr) {
-          console.warn("Slug lookup warning:", lookupErr);
-        }
-        if (!candidateEmail.includes('@')) {
-          candidateEmail = `${slugFormatted}@mysellflow.store`;
-        }
-      }
-
-      // First attempt: Sign in with candidate email
-      try {
-        await signInWithEmailAndPassword(auth, candidateEmail, cleanPassword);
-      } catch (firstErr: any) {
-        let signedIn = false;
-
-        // Fallback 1: Candidate email casing fallback if candidate is a store account
-        if (candidateEmail.endsWith('@mysellflow.store')) {
-          try {
-            const bizSnap = await getDocs(query(collection(db, 'businesses'), where('loginEmail', '==', candidateEmail)));
-            if (!bizSnap.empty) {
-              const bizData = bizSnap.docs[0].data();
-              if (bizData.managedPassword && bizData.managedPassword.toLowerCase() === cleanPassword.toLowerCase()) {
-                await signInWithEmailAndPassword(auth, candidateEmail, bizData.managedPassword);
-                signedIn = true;
-              }
-            }
-          } catch {
-            // ignore
-          }
-        }
-
-        // Fallback 2: If user entered an email that has a separate store loginEmail in Firestore
-        if (!signedIn && cleanEmail.includes('@')) {
-          try {
-            const bizQuery = query(collection(db, 'businesses'), where('email', '==', cleanEmail));
-            const bizSnap = await getDocs(bizQuery);
-            if (!bizSnap.empty) {
-              const bizData = bizSnap.docs[0].data();
-              const altLogin = bizData.loginEmail || (bizData.storeSlug ? `${bizData.storeSlug.toLowerCase().replace(/[^a-z0-9]/g, '')}@mysellflow.store` : null);
-              if (altLogin) {
-                try {
-                  await signInWithEmailAndPassword(auth, altLogin, cleanPassword);
-                  signedIn = true;
-                } catch {
-                  // If password differs only by mobile keyboard casing (e.g. initial cap), try stored managed password
-                  if (bizData.managedPassword && bizData.managedPassword.toLowerCase() === cleanPassword.toLowerCase()) {
-                    await signInWithEmailAndPassword(auth, altLogin, bizData.managedPassword);
-                    signedIn = true;
-                  }
-                }
-              }
-            }
-          } catch (lookupErr) {
-            console.warn("Alternative store login lookup warning:", lookupErr);
-          }
-        }
-
-        // Fallback 2: Raw string fallback in case of legacy whitespace
-        if (!signedIn && (rawEmail !== cleanEmail || rawPassword !== cleanPassword)) {
-          try {
-            await signInWithEmailAndPassword(auth, rawEmail, rawPassword);
-            signedIn = true;
-          } catch {
-            // keep going to throw firstErr
-          }
-        }
-
-        if (!signedIn) {
-          throw firstErr;
-        }
-      }
-
+      await signInWithEmailAndPassword(auth, email, password);
       // Successful login reset
       setFailedAttempts(0);
       setLockoutTime(null);
@@ -4901,28 +4810,24 @@ const AuthScreen = ({
     e.preventDefault();
     if (!checkRateLimit()) return;
 
-    const cleanEmail = (email || '').trim();
-    const cleanPassword = (password || '').trim();
-    const cleanConfirm = (confirmPassword || '').trim();
-
-    if (!cleanEmail || !cleanPassword || !cleanConfirm) {
+    if (!email || !password || !confirmPassword) {
       if (showToast) showToast("All fields are required to sign up.", "error");
       return;
     }
 
-    if (cleanPassword !== cleanConfirm) {
+    if (password !== confirmPassword) {
       if (showToast) showToast("Passwords do not match.", "error");
       return;
     }
 
-    if (cleanPassword.length < 6) {
+    if (password.length < 6) {
       if (showToast) showToast("Password needs to be at least 6 characters.", "error");
       return;
     }
 
     setLoading(true);
     try {
-      await createUserWithEmailAndPassword(auth, cleanEmail, cleanPassword);
+      await createUserWithEmailAndPassword(auth, email, password);
       setFailedAttempts(0);
       setLockoutTime(null);
       if (showToast) showToast("Account created successfully! Welcome to SellFlow.", "success");
@@ -4940,15 +4845,14 @@ const AuthScreen = ({
 
   const handleForgotPasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanResetEmail = (resetEmail || '').trim();
-    if (!cleanResetEmail) {
+    if (!resetEmail) {
       if (showToast) showToast("Please provide your email address.", "error");
       return;
     }
     setLoading(true);
     try {
-      await sendPasswordResetEmail(auth, cleanResetEmail);
-      if (showToast) showToast(`Instructions sent to ${cleanResetEmail}. Check your inbox!`, "success");
+      await sendPasswordResetEmail(auth, resetEmail);
+      if (showToast) showToast(`Instructions sent to ${resetEmail}. Check your inbox!`, "success");
       setShowForgotPassword(false);
     } catch (error: any) {
       const msg = getFriendlyErrorMessage(error);
@@ -5058,17 +4962,14 @@ const AuthScreen = ({
               {activeTab === 'signin' ? (
                 <form onSubmit={handleSignIn} className="space-y-4">
                   <div className="space-y-1">
-                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Email or Store Slug</label>
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Email Address</label>
                     <div className="relative">
                       <Mail className="absolute left-3 top-3 px-0.5 text-slate-400" size={14} />
                       <input 
-                        type="text" 
-                        placeholder="you@example.com or store slug (e.g. hairmaster)" 
+                        type="email" 
+                        placeholder="you@example.com" 
                         value={email} 
                         onChange={e => setEmail(e.target.value)} 
-                        autoCapitalize="none"
-                        autoCorrect="off"
-                        spellCheck="false"
                         className="w-full bg-slate-950/50 border border-slate-800 p-3 pl-9 rounded-xl text-xs font-medium text-white outline-none focus:border-sky-500 transition-colors"
                         required
                       />
@@ -5081,7 +4982,7 @@ const AuthScreen = ({
                       <button 
                         type="button" 
                         onClick={() => setShowForgotPassword(true)}
-                        className="text-[9px] font-bold text-sky-400 hover:underline hover:text-sky-300 cursor-pointer"
+                        className="text-[9px] font-bold text-sky-400 hover:underline hover:text-sky-300"
                       >
                         Forgot?
                       </button>
@@ -5093,16 +4994,13 @@ const AuthScreen = ({
                         placeholder="••••••••" 
                         value={password} 
                         onChange={e => setPassword(e.target.value)} 
-                        autoCapitalize="none"
-                        autoCorrect="off"
-                        spellCheck="false"
-                        className="w-full bg-slate-950/50 border border-slate-800 p-3 pl-9 pr-10 rounded-xl text-xs font-medium text-white outline-none focus:border-sky-500 transition-colors font-mono"
+                        className="w-full bg-slate-950/50 border border-slate-800 p-3 pl-9 pr-10 rounded-xl text-xs font-medium text-white outline-none focus:border-sky-500 transition-colors"
                         required
                       />
                       <button 
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-3 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                        className="absolute right-3 top-3 text-slate-400 hover:text-white transition-colors"
                       >
                         {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
                       </button>
@@ -5128,9 +5026,6 @@ const AuthScreen = ({
                         placeholder="you@example.com" 
                         value={email} 
                         onChange={e => setEmail(e.target.value)} 
-                        autoCapitalize="none"
-                        autoCorrect="off"
-                        spellCheck="false"
                         className="w-full bg-slate-950/50 border border-slate-800 p-3 pl-9 rounded-xl text-xs font-medium text-white outline-none focus:border-sky-500 transition-colors"
                         required
                       />
@@ -5146,16 +5041,13 @@ const AuthScreen = ({
                         placeholder="Choose secure password" 
                         value={password} 
                         onChange={e => setPassword(e.target.value)} 
-                        autoCapitalize="none"
-                        autoCorrect="off"
-                        spellCheck="false"
-                        className="w-full bg-slate-950/50 border border-slate-800 p-3 pl-9 pr-10 rounded-xl text-xs font-medium text-white outline-none focus:border-sky-500 transition-colors font-mono"
+                        className="w-full bg-slate-950/50 border border-slate-800 p-3 pl-9 pr-10 rounded-xl text-xs font-medium text-white outline-none focus:border-sky-500 transition-colors"
                         required
                       />
                       <button 
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-3 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                        className="absolute right-3 top-3 text-slate-400 hover:text-white transition-colors"
                       >
                         {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
                       </button>
@@ -5171,10 +5063,7 @@ const AuthScreen = ({
                         placeholder="Repeat your password" 
                         value={confirmPassword} 
                         onChange={e => setConfirmPassword(e.target.value)} 
-                        autoCapitalize="none"
-                        autoCorrect="off"
-                        spellCheck="false"
-                        className="w-full bg-slate-950/50 border border-slate-800 p-3 pl-9 pr-10 rounded-xl text-xs font-medium text-white outline-none focus:border-sky-500 transition-colors font-mono"
+                        className="w-full bg-slate-950/50 border border-slate-800 p-3 pl-9 pr-10 rounded-xl text-xs font-medium text-white outline-none focus:border-sky-500 transition-colors"
                         required
                       />
                     </div>
@@ -5775,8 +5664,6 @@ export default function App() {
         const newBusiness: BusinessProfile = {
           ...INITIAL_BUSINESS,
           name: rawName,
-          email: user.email || '',
-          loginEmail: user.email || '',
           ownerId: user.uid,
           storeSlug: initialSlug,
           storefrontUrl: `https://${initialSlug}.mysellflow.store`,
@@ -5809,33 +5696,27 @@ export default function App() {
       setProducts(prods);
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'products'));
 
-    // 3. Leads - query by ownerId and sort in-memory to prevent missing composite index errors
-    const qLeads = query(collection(db, 'leads'), where('ownerId', '==', user.uid));
+    // 3. Leads
+    const qLeads = query(collection(db, 'leads'), where('ownerId', '==', user.uid), orderBy('createdAt', 'desc'));
     const unsubLeads = onSnapshot(qLeads, (snapshot) => {
       console.log(`Leads Listener: Received ${snapshot.docs.length} docs`);
-      const lds = snapshot.docs
-        .map(d => ({ ...d.data(), id: d.id } as Lead))
-        .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+      const lds = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Lead));
       setLeads(lds);
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'leads'));
 
-    // 4. Orders - query by ownerId and sort in-memory to prevent missing composite index errors
-    const qOrders = query(collection(db, 'orders'), where('ownerId', '==', user.uid));
+    // 4. Orders
+    const qOrders = query(collection(db, 'orders'), where('ownerId', '==', user.uid), orderBy('createdAt', 'desc'));
     const unsubOrders = onSnapshot(qOrders, (snapshot) => {
       console.log(`Orders Listener: Received ${snapshot.docs.length} docs`);
-      const ords = snapshot.docs
-        .map(d => ({ ...d.data(), id: d.id } as Order))
-        .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+      const ords = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Order));
       setOrders(ords);
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'orders'));
 
-    // 5. Reviews - query by ownerId and sort in-memory to prevent missing composite index errors
-    const qReviews = query(collection(db, 'reviews'), where('ownerId', '==', user.uid));
+    // 5. Reviews
+    const qReviews = query(collection(db, 'reviews'), where('ownerId', '==', user.uid), orderBy('createdAt', 'desc'));
     const unsubReviews = onSnapshot(qReviews, (snapshot) => {
       console.log(`Reviews Listener: Received ${snapshot.docs.length} docs`);
-      const revs = snapshot.docs
-        .map(d => ({ ...d.data(), id: d.id } as Review))
-        .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+      const revs = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Review));
       
       if (isFirstReviewsLoad.current) {
         isFirstReviewsLoad.current = false;

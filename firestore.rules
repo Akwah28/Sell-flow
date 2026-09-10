@@ -9,16 +9,7 @@ service cloud.firestore {
 
     // --- REUSABLE HELPERS ---
     function isSignedIn() { return request.auth != null; }
-    function isAdmin() { 
-      return isSignedIn() && (
-        request.auth.token.email == 'godgiftakwah28@gmail.com'
-        || request.auth.token.get('email', '') == 'godgiftakwah28@gmail.com'
-        || request.auth.token.email == 'admin.system@mysellflow.store'
-        || request.auth.token.get('email', '') == 'admin.system@mysellflow.store'
-        || request.auth.uid == '2UNThHvHnUaFVwV9cfwIpxmOyx93'
-      );
-    }
-    function isOwner(data) { return isSignedIn() && (data.ownerId == request.auth.uid || isAdmin()); }
+    function isOwner(data) { return isSignedIn() && data.ownerId == request.auth.uid; }
     function incoming() { return request.resource.data; }
     function existing() { return resource.data; }
     function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
@@ -35,14 +26,11 @@ service cloud.firestore {
         && data.whatsappNumber is string && data.whatsappNumber.size() <= 30
         && data.storeSlug is string && data.storeSlug.size() > 0 && data.storeSlug.size() <= 50
         && data.isVerified is bool
-        && (isAdmin() || data.ownerId == request.auth.uid)
+        && data.ownerId == request.auth.uid
         && (data.get('logo', '') is string && data.get('logo', '').size() <= 1048576)
         && (data.get('whatsappToken', '') is string && data.get('whatsappToken', '').size() <= 2000)
         && (data.get('whatsappPhoneId', '') is string && data.get('whatsappPhoneId', '').size() <= 100)
         && (data.get('whatsappBusinessAccountId', '') is string && data.get('whatsappBusinessAccountId', '').size() <= 100)
-        && (data.get('email', '') is string)
-        && (data.get('loginEmail', '') is string)
-        && (data.get('managedPassword', '') is string)
         && isNumeric(data.get('views', 0))
         && isNumeric(data.get('clicksMessageMerchant', 0))
         && isNumeric(data.get('clicksWhatsAppOrder', 0));
@@ -127,46 +115,45 @@ service cloud.firestore {
 
     match /slugs/{slug} {
       allow get, list: if true;
-      allow create: if isSignedIn() && (isAdmin() || (incoming().ownerId == request.auth.uid && isValidSlugMapping(incoming())));
-      allow update: if isSignedIn() && (isAdmin() || (existing().ownerId == request.auth.uid && incoming().ownerId == request.auth.uid && isValidSlugMapping(incoming())));
-      allow delete: if isSignedIn() && (isAdmin() || existing().ownerId == request.auth.uid);
+      allow create: if isSignedIn() && incoming().ownerId == request.auth.uid && isValidSlugMapping(incoming());
+      allow update: if isSignedIn() && existing().ownerId == request.auth.uid && incoming().ownerId == request.auth.uid && isValidSlugMapping(incoming());
+      allow delete: if isSignedIn() && existing().ownerId == request.auth.uid;
     }
 
     match /businesses/{businessId} {
       allow read: if true; // Public for storefront and global explore discovery
-      allow create: if isSignedIn() && (isAdmin() || (request.auth.uid == businessId && isValidBusiness(incoming())));
-      allow update: if isAdmin()
-        || (isSignedIn() && request.auth.uid == businessId && isValidBusiness(incoming()) && incoming().ownerId == request.auth.uid)
+      allow create: if isSignedIn() && request.auth.uid == businessId && isValidBusiness(incoming());
+      allow update: if (isSignedIn() && request.auth.uid == businessId && isValidBusiness(incoming()) && incoming().ownerId == request.auth.uid)
         || (incoming().diff(existing()).affectedKeys().hasOnly(['views', 'clicksMessageMerchant', 'clicksWhatsAppOrder', 'isVerified'])
             && (!incoming().diff(existing()).affectedKeys().hasAny(['views']) || incoming().views == existing().get('views', 0) + 1)
             && (!incoming().diff(existing()).affectedKeys().hasAny(['clicksMessageMerchant']) || incoming().get('clicksMessageMerchant', 0) == existing().get('clicksMessageMerchant', 0) + 1)
             && (!incoming().diff(existing()).affectedKeys().hasAny(['clicksWhatsAppOrder']) || incoming().get('clicksWhatsAppOrder', 0) == existing().get('clicksWhatsAppOrder', 0) + 1)
            );
-      allow delete: if isAdmin(); 
+      allow delete: if false; 
     }
 
     match /products/{productId} {
       allow read: if true; 
-      allow create: if isSignedIn() && (isAdmin() || isValidProduct(incoming()));
-      allow update: if isAdmin() || (isOwner(existing()) && isValidProduct(incoming()) 
-        && incoming().ownerId == existing().ownerId);
+      allow create: if isSignedIn() && isValidProduct(incoming());
+      allow update: if isOwner(existing()) && isValidProduct(incoming()) 
+        && incoming().ownerId == existing().ownerId;
       allow delete: if isOwner(existing());
     }
 
     match /leads/{leadId} {
       allow get: if isOwner(existing());
-      allow list: if isSignedIn() && (isAdmin() || resource.data.ownerId == request.auth.uid);
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
       allow create: if isValidLead(incoming()); // Allow public lead creation
-      allow update: if isAdmin() || (isOwner(existing()) && isValidLead(incoming()) 
-        && incoming().ownerId == existing().ownerId);
+      allow update: if isOwner(existing()) && isValidLead(incoming()) 
+        && incoming().ownerId == existing().ownerId;
       allow delete: if isOwner(existing());
     }
 
     match /orders/{orderId} {
-      allow get, list: if isSignedIn() && (isAdmin() || resource.data.ownerId == request.auth.uid);
+      allow get, list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
       allow create: if isSignedIn() && isValidOrder(incoming());
-      allow update: if isAdmin() || (isOwner(existing()) && isValidOrder(incoming())
-        && incoming().ownerId == existing().ownerId);
+      allow update: if isOwner(existing()) && isValidOrder(incoming())
+        && incoming().ownerId == existing().ownerId;
       allow delete: if isOwner(existing());
     }
 

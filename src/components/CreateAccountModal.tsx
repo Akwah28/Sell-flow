@@ -41,8 +41,7 @@ export const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [createdResult, setCreatedResult] = useState<CreatedMerchantResult | null>(null);
-  const [copiedField, setCopiedField] = useState<'full' | 'email' | 'password' | null>(null);
-  const [showCreatedPassword, setShowCreatedPassword] = useState(true);
+  const [copied, setCopied] = useState(false);
 
   // Auto-sync slug from merchant name if slug wasn't manually edited
   const [isSlugManual, setIsSlugManual] = useState(false);
@@ -57,12 +56,11 @@ export const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
     }
   }, [merchantName, isSlugManual]);
 
-  // Clean, high-entropy password generator without ambiguous characters (no 0/O, 1/I/l) or breaking symbols
   const generatePassword = () => {
-    const charset = '23456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz';
-    let res = 'Flow';
-    for (let i = 0; i < 6; i++) {
-      res += charset.charAt(Math.floor(Math.random() * charset.length));
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%';
+    let res = '';
+    for (let i = 0; i < 10; i++) {
+      res += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     setPassword(res);
     setShowPassword(true);
@@ -77,22 +75,18 @@ export const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
     setCurrency('USD');
     setIsSlugManual(false);
     setCreatedResult(null);
-    setCopiedField(null);
+    setCopied(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const cleanName = merchantName.trim();
-    const cleanEmail = email.trim();
-    const cleanPassword = password.trim();
-
-    if (!cleanName || !cleanEmail || !cleanPassword) {
+    if (!merchantName.trim() || !email.trim() || !password.trim()) {
       showToast?.('Please fill out Store Name, Email, and Password.', 'error');
       return;
     }
 
-    if (cleanPassword.length < 6) {
+    if (password.length < 6) {
       showToast?.('Password must be at least 6 characters.', 'error');
       return;
     }
@@ -100,17 +94,16 @@ export const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
     setLoading(true);
     try {
       const result = await createMerchantAccountForOther({
-        email: cleanEmail,
-        password: cleanPassword,
-        merchantName: cleanName,
+        email: email.trim(),
+        password: password.trim(),
+        merchantName: merchantName.trim(),
         storeSlug: storeSlug.trim() || undefined,
         currency,
         whatsappNumber: whatsappNumber.trim()
       });
 
       setCreatedResult(result);
-      setShowCreatedPassword(true);
-      showToast?.(`Account setup verified for ${result.merchantName}!`, 'success');
+      showToast?.(`Account created for ${result.merchantName}!`, 'success');
       onAccountCreated?.(result);
     } catch (err: any) {
       console.error('Account creation error:', err);
@@ -119,8 +112,6 @@ export const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
         msg = 'An account with this email address already exists.';
       } else if (err?.code === 'auth/invalid-email') {
         msg = 'The email address is invalid.';
-      } else if (err?.code === 'auth/weak-password') {
-        msg = 'Password is too weak. Please use at least 6 characters.';
       }
       showToast?.(msg, 'error');
     } finally {
@@ -128,35 +119,20 @@ export const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
     }
   };
 
-  const copyField = (field: 'email' | 'password') => {
-    if (!createdResult) return;
-    const val = field === 'email' ? (createdResult.loginEmail || createdResult.email) : (createdResult.password || '');
-    navigator.clipboard.writeText(val);
-    setCopiedField(field);
-    showToast?.(`${field === 'email' ? 'Login identifier' : 'Password'} copied!`, 'success');
-    setTimeout(() => setCopiedField(null), 2500);
-  };
-
   const copyCredentials = () => {
     if (!createdResult) return;
-    const loginIdent = createdResult.loginEmail || createdResult.email;
-    let text = `🎉 SellFlow Merchant Account Credentials\n\n` +
-      `🏪 Store: ${createdResult.merchantName}\n` +
-      `🔗 Storefront: ${createdResult.storefrontUrl}\n` +
-      `🔑 Login Identifier: ${loginIdent}\n`;
-    
-    if (createdResult.loginEmail && createdResult.loginEmail !== createdResult.email) {
-      text += `📧 Contact Email: ${createdResult.email}\n`;
-    }
-
-    text += `🔒 Password: ${createdResult.password || '******'}\n` +
-      `📲 Login URL: ${createdResult.loginUrl}\n\n` +
-      `Sign in to manage inventory, view orders, and customize your storefront.`;
+    const text = `🎉 Your SellFlow Online Store Account is Ready!\n\n` +
+      `🏪 Store Name: ${createdResult.merchantName}\n` +
+      `🔗 Store Link: ${createdResult.storefrontUrl}\n` +
+      `🔑 Login Email: ${createdResult.email}\n` +
+      `🔒 Password: ${createdResult.password || '******'}\n` +
+      `📲 Login Portal: ${createdResult.loginUrl}\n\n` +
+      `You can sign in anytime to manage your products and orders!`;
 
     navigator.clipboard.writeText(text);
-    setCopiedField('full');
-    showToast?.('Full merchant credentials copied to clipboard!', 'success');
-    setTimeout(() => setCopiedField(null), 3000);
+    setCopied(true);
+    showToast?.('Merchant credentials copied to clipboard!', 'success');
+    setTimeout(() => setCopied(false), 3000);
   };
 
   if (!isOpen) return null;
@@ -224,8 +200,8 @@ export const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
                   onClick={copyCredentials}
                   className="text-xs font-bold text-purple-400 hover:text-purple-300 flex items-center gap-1.5 transition-colors"
                 >
-                  {copiedField === 'full' ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
-                  <span>{copiedField === 'full' ? 'All Copied!' : 'Copy All'}</span>
+                  {copied ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
+                  <span>{copied ? 'Copied to Clipboard!' : 'Copy Info'}</span>
                 </button>
               </div>
 
@@ -246,63 +222,14 @@ export const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
                     <ExternalLink size={10} />
                   </a>
                 </div>
-                
-                {/* Login Identifier with 1-click copy */}
-                <div className="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800/80 flex items-center justify-between">
-                  <div className="min-w-0 pr-2">
-                    <span className="text-slate-500 block text-[9px] uppercase font-bold tracking-wider">
-                      {createdResult.loginEmail && createdResult.loginEmail !== createdResult.email ? 'Login Identifier / Store Email' : 'Login Email'}
-                    </span>
-                    <span className="font-mono text-slate-200 text-xs font-semibold truncate block">
-                      {createdResult.loginEmail || createdResult.email}
-                    </span>
-                    {createdResult.loginEmail && createdResult.loginEmail !== createdResult.email && (
-                      <span className="text-[10px] text-slate-400 block mt-0.5 truncate">
-                        Contact: {createdResult.email}
-                      </span>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => copyField('email')}
-                    title="Copy Login Identifier"
-                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer shrink-0"
-                  >
-                    {copiedField === 'email' ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
-                  </button>
+                <div>
+                  <span className="text-slate-500 block text-[10px] uppercase font-semibold">Email</span>
+                  <span className="font-mono text-slate-200">{createdResult.email}</span>
                 </div>
-
-                {/* Password with eye toggle & 1-click copy */}
-                <div className="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800/80 flex items-center justify-between">
-                  <div className="min-w-0 pr-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-slate-500 text-[9px] uppercase font-bold tracking-wider">Password</span>
-                      <button
-                        type="button"
-                        onClick={() => setShowCreatedPassword(!showCreatedPassword)}
-                        className="text-slate-500 hover:text-slate-300 text-[9px]"
-                      >
-                        {showCreatedPassword ? 'Hide' : 'Show'}
-                      </button>
-                    </div>
-                    <span className="font-mono font-bold text-purple-300 text-xs truncate block">
-                      {showCreatedPassword ? createdResult.password : '••••••••••'}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => copyField('password')}
-                    title="Copy exact password"
-                    className="p-1.5 rounded-lg bg-purple-600/30 hover:bg-purple-600/50 text-purple-300 hover:text-white transition-colors cursor-pointer shrink-0"
-                  >
-                    {copiedField === 'password' ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
-                  </button>
+                <div>
+                  <span className="text-slate-500 block text-[10px] uppercase font-semibold">Password</span>
+                  <span className="font-mono font-bold text-purple-300">{createdResult.password}</span>
                 </div>
-              </div>
-
-              <div className="pt-2 text-[10px] text-emerald-400/90 flex items-center gap-1.5 font-medium">
-                <Check size={12} className="shrink-0 text-emerald-400" />
-                <span>Verified with Firebase. Credentials work immediately without verification links.</span>
               </div>
             </div>
 
@@ -310,15 +237,15 @@ export const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
               <button
                 type="button"
                 onClick={copyCredentials}
-                className="flex-1 bg-purple-600 hover:bg-purple-500 text-white py-3 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-lg transition-all cursor-pointer"
+                className="flex-1 bg-purple-600 hover:bg-purple-500 text-white py-3 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-lg transition-all"
               >
-                {copiedField === 'full' ? <Check size={16} /> : <Copy size={16} />}
-                {copiedField === 'full' ? 'Credentials Copied!' : 'Copy Credentials to Share'}
+                {copied ? <Check size={16} /> : <Copy size={16} />}
+                {copied ? 'Credentials Copied!' : 'Copy Credentials to Share'}
               </button>
               <button
                 type="button"
                 onClick={handleReset}
-                className="bg-slate-800 hover:bg-slate-700 text-slate-200 py-3 px-5 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                className="bg-slate-800 hover:bg-slate-700 text-slate-200 py-3 px-5 rounded-xl text-xs font-bold transition-colors"
               >
                 Create Another Account
               </button>
@@ -360,9 +287,6 @@ export const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
                       setIsSlugManual(true);
                       setStoreSlug(e.target.value.toLowerCase().replace(/[^a-z0-9_\-]/g, ''));
                     }}
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    spellCheck="false"
                     className="w-full bg-slate-950/80 border border-slate-800 rounded-l-xl px-3.5 py-2.5 text-xs font-mono text-purple-300 placeholder-slate-600 focus:outline-none focus:border-purple-500 transition-colors"
                   />
                   <span className="bg-slate-800/80 border border-l-0 border-slate-800 text-slate-400 px-2.5 py-2.5 rounded-r-xl text-[10px] font-mono whitespace-nowrap">
@@ -384,9 +308,6 @@ export const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
                 placeholder="merchant@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                autoCapitalize="none"
-                autoCorrect="off"
-                spellCheck="false"
                 className="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-purple-500 transition-colors"
               />
             </div>
@@ -401,7 +322,7 @@ export const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
                 <button
                   type="button"
                   onClick={generatePassword}
-                  className="text-[10px] font-bold text-purple-400 hover:text-purple-300 flex items-center gap-1 transition-colors cursor-pointer"
+                  className="text-[10px] font-bold text-purple-400 hover:text-purple-300 flex items-center gap-1 transition-colors"
                 >
                   <Sparkles size={11} />
                   Generate Strong Password
@@ -414,15 +335,12 @@ export const CreateAccountModal: React.FC<CreateAccountModalProps> = ({
                   placeholder="Min. 6 characters"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  spellCheck="false"
                   className="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-3.5 py-2.5 pr-10 text-xs font-mono text-white placeholder-slate-600 focus:outline-none focus:border-purple-500 transition-colors"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-2.5 text-slate-500 hover:text-slate-300 cursor-pointer"
+                  className="absolute right-3 top-2.5 text-slate-500 hover:text-slate-300"
                 >
                   {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
                 </button>
