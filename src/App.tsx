@@ -48,7 +48,8 @@ import {
   UserPlus,
   Database,
   Zap,
-  AlertTriangle
+  AlertTriangle,
+  Info
 } from 'lucide-react';
 import CreateAccountModal from './components/CreateAccountModal';
 import { motion, AnimatePresence, animate } from 'framer-motion';
@@ -73,7 +74,7 @@ import {
 import { cn, formatCurrency, compressImage } from './lib/utils';
 import { Product, Lead, Order, FollowUp, BusinessProfile, Review, LeadStatus, OrderStatus, ProductType, InventoryStatus } from './types';
 import { sendWhatsAppMessage } from './services/whatsappService';
-import { db, auth, OperationType, handleFirestoreError, isQuotaError, isQuotaLimitActive } from './firebase';
+import { db, auth, OperationType, handleFirestoreError, isQuotaError, isQuotaLimitActive, clearQuotaLimit, checkFirestoreConnection } from './firebase';
 import { 
   onAuthStateChanged, 
   signInWithPopup, 
@@ -989,9 +990,67 @@ const parseDate = (val: any): Date | null => {
   return isNaN(d.getTime()) ? null : d;
 };
 
-const QuotaNoticeBanner = ({ onRetrySync }: { onRetrySync: () => void }) => {
+function calculatePacificTimeRemaining() {
+  try {
+    const now = new Date();
+    const ptTimeString = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Los_Angeles',
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    }).format(now);
+
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Los_Angeles',
+      hour: 'numeric',
+      minute: 'numeric',
+      second: 'numeric',
+      hour12: false
+    }).formatToParts(now);
+
+    let h = 0, m = 0, s = 0;
+    for (const p of parts) {
+      if (p.type === 'hour') h = parseInt(p.value, 10);
+      if (p.type === 'minute') m = parseInt(p.value, 10);
+      if (p.type === 'second') s = parseInt(p.value, 10);
+    }
+    let secondsUntilMidnight = (23 - h) * 3600 + (59 - m) * 60 + (60 - s);
+    if (secondsUntilMidnight < 0) secondsUntilMidnight = 0;
+
+    const hours = Math.floor(secondsUntilMidnight / 3600);
+    const minutes = Math.floor((secondsUntilMidnight % 3600) / 60);
+    const seconds = secondsUntilMidnight % 60;
+
+    return {
+      ptTimeString,
+      hours,
+      minutes,
+      seconds,
+      formattedCountdown: `${hours}h ${minutes.toString().padStart(2, '0')}m ${seconds.toString().padStart(2, '0')}s`
+    };
+  } catch {
+    return {
+      ptTimeString: 'US Pacific Time',
+      hours: 2,
+      minutes: 0,
+      seconds: 0,
+      formattedCountdown: '~2 hours'
+    };
+  }
+}
+
+const QuotaNoticeBanner = ({ onRetrySync }: { onRetrySync: () => Promise<void> | void }) => {
   const [isDismissed, setIsDismissed] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
+  const [timeInfo, setTimeInfo] = useState(() => calculatePacificTimeRemaining());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTimeInfo(calculatePacificTimeRemaining());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const upgradeUrl = "https://console.firebase.google.com/project/gen-lang-client-0101119593/firestore/databases/ai-studio-b528e24a-438a-496b-a8b1-cd1844a59c0c/data?openUpgradeDialog=true";
 
@@ -1009,13 +1068,13 @@ const QuotaNoticeBanner = ({ onRetrySync }: { onRetrySync: () => void }) => {
       <div className="bg-amber-50 border border-amber-200/90 rounded-2xl px-4 py-3 flex items-center justify-between text-xs text-amber-900 shadow-sm mb-6">
         <div className="flex items-center gap-2.5">
           <Database size={16} className="text-amber-600 shrink-0" />
-          <span className="font-bold">Offline & Local Mode Active (Firestore Daily Free Read Quota Reached)</span>
+          <span className="font-bold">Offline & Local Mode Active • Google Daily Quota Resets in {timeInfo.formattedCountdown}</span>
         </div>
         <button 
           onClick={() => setIsDismissed(false)}
           className="underline font-bold text-amber-900 hover:text-amber-700 text-xs transition-colors"
         >
-          View Details & Upgrade ↗
+          View Details & Countdown ↗
         </button>
       </div>
     );
@@ -1025,17 +1084,17 @@ const QuotaNoticeBanner = ({ onRetrySync }: { onRetrySync: () => void }) => {
     <div className="relative overflow-hidden rounded-2xl border border-amber-300/80 bg-gradient-to-br from-amber-50 via-orange-50/60 to-amber-50 p-5 sm:p-6 shadow-sm mb-6">
       <div className="flex flex-col md:flex-row items-start gap-4">
         <div className="w-11 h-11 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-700 shrink-0">
-          <Database size={24} className="text-amber-700" />
+          <Clock size={24} className="text-amber-700" />
         </div>
 
-        <div className="flex-1 space-y-2.5">
+        <div className="flex-1 space-y-3">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-2.5 flex-wrap">
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-200/90 text-amber-950">
                 Firestore Free Tier (Spark Plan)
               </span>
               <h3 className="text-base font-black text-slate-900 tracking-tight">
-                Daily Read Quota Exceeded
+                Why isn't it working yet? Google's 24-Hour Reset Countdown
               </h3>
             </div>
             <button
@@ -1046,10 +1105,31 @@ const QuotaNoticeBanner = ({ onRetrySync }: { onRetrySync: () => void }) => {
             </button>
           </div>
 
+          {/* Timezone Explanation & Live Countdown Box */}
+          <div className="p-3.5 rounded-xl bg-amber-100/70 border border-amber-300/60 text-xs sm:text-sm text-slate-800 space-y-2">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <span className="inline-block w-2 h-2 rounded-full bg-amber-500 animate-ping" />
+                <span className="font-semibold text-slate-700">Google Cloud Server Time (US Pacific):</span>
+                <span className="font-bold text-slate-900 bg-white/80 px-2 py-0.5 rounded-md border border-amber-200 font-mono">
+                  {timeInfo.ptTimeString} PDT
+                </span>
+              </div>
+              <div className="flex items-center gap-2 font-mono text-xs">
+                <span className="text-slate-600">Quota Reset In:</span>
+                <span className="px-2 py-0.5 rounded-md bg-amber-600 text-white font-black tracking-wide">
+                  {timeInfo.formattedCountdown}
+                </span>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              <strong>Timezone Explanation:</strong> Even though it is already a new calendar day in your local time zone, Google Firestore's 50,000 free daily read quota resets strictly at <strong>Midnight US Pacific Time (00:00 PDT / 07:00 UTC)</strong>.
+            </p>
+          </div>
+
           <p className="text-xs sm:text-sm text-slate-600 leading-relaxed max-w-4xl">
-            This database is on Google Firebase's free Spark plan, which provides 50,000 free read operations per day. 
-            <strong className="font-semibold text-slate-800"> Your dashboard is fully operational in Local & Offline Cache Mode</strong>: 
-            you can create products, manage leads, update settings, and review data without losing your work. Free reads reset automatically every day at midnight Pacific Time (00:00 UTC).
+            <strong className="font-semibold text-slate-900">Your dashboard is 100% active in Offline & Local Cache Mode:</strong> You can create products, manage leads, update settings, and record orders without losing your work. Everything is saved locally on your device and will seamlessly sync to the cloud once the quota reset occurs.
           </p>
 
           <div className="flex items-center gap-3 pt-1 flex-wrap">
@@ -1070,7 +1150,7 @@ const QuotaNoticeBanner = ({ onRetrySync }: { onRetrySync: () => void }) => {
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold transition-all active:scale-95 cursor-pointer shadow-sm"
             >
               <RefreshCw size={13} className={cn("text-slate-500", isRetrying && "animate-spin")} />
-              <span>{isRetrying ? "Testing Connection..." : "Retry Cloud Sync"}</span>
+              <span>{isRetrying ? "Checking Cloud Quota..." : "Test Cloud Connection"}</span>
             </button>
 
             <a
@@ -1079,7 +1159,7 @@ const QuotaNoticeBanner = ({ onRetrySync }: { onRetrySync: () => void }) => {
               rel="noopener noreferrer"
               className="text-xs font-semibold text-slate-500 hover:text-slate-800 underline transition-colors px-1"
             >
-              Learn about Firestore Quota Limits ↗
+              Learn about Spark Plan Limits ↗
             </a>
           </div>
         </div>
@@ -5541,7 +5621,14 @@ export default function App() {
   const [syncTrigger, setSyncTrigger] = useState(0);
 
   useEffect(() => {
-    const handleQuota = () => setIsQuotaMode(true);
+    const handleQuota = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.type === 'firestore-quota-exceeded' || customEvent.detail?.quotaExceeded) {
+        setIsQuotaMode(true);
+      } else if (customEvent.detail?.quotaExceeded === false && customEvent.detail?.isOffline === false) {
+        setIsQuotaMode(false);
+      }
+    };
     window.addEventListener('firestore-quota-exceeded', handleQuota);
     window.addEventListener('firestore-connection-status', handleQuota);
     return () => {
@@ -5550,13 +5637,24 @@ export default function App() {
     };
   }, []);
 
-  const handleRetrySync = () => {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('firestore_quota_limit_active_until');
+  const handleRetrySync = async () => {
+    clearQuotaLimit();
+    showToast("Testing connection to Firebase Firestore...", "info");
+    try {
+      const res = await checkFirestoreConnection();
+      if (res.online && !res.quotaExceeded) {
+        setIsQuotaMode(false);
+        setSyncTrigger(prev => prev + 1);
+        showToast("Cloud connection restored! Your store is syncing with Firestore.", "success");
+      } else if (res.quotaExceeded) {
+        setIsQuotaMode(true);
+        showToast("Google's daily quota is still active. Resets at midnight Pacific Time (00:00 PDT).", "error");
+      } else {
+        showToast(res.message || "Connection check timed out. Still running in Offline Cache Mode.", "info");
+      }
+    } catch (e) {
+      console.warn("Notice: Sync retry check completed:", e);
     }
-    setIsQuotaMode(false);
-    setSyncTrigger(prev => prev + 1);
-    showToast("Testing cloud connection...", "info");
   };
 
   const isFirstReviewsLoad = React.useRef(true);

@@ -72,6 +72,38 @@ export function markQuotaLimitActive(durationMinutes: number = 10) {
   }
 }
 
+export function clearQuotaLimit() {
+  if (typeof window === 'undefined') return;
+  try {
+    sessionStorage.removeItem('mysellflow_quota_exceeded_until');
+    localStorage.removeItem('mysellflow_quota_exceeded_until');
+    localStorage.removeItem('firestore_quota_limit_active_until');
+  } catch {}
+}
+
+export async function checkFirestoreConnection(): Promise<{ online: boolean; quotaExceeded: boolean; message?: string }> {
+  if (typeof window !== 'undefined' && !window.navigator.onLine) {
+    return { online: false, quotaExceeded: false, message: 'Browser is offline' };
+  }
+  try {
+    const pingPromise = getDocFromServer(doc(db, 'test', 'connection'));
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 4000));
+    await Promise.race([pingPromise, timeoutPromise]);
+    clearQuotaLimit();
+    return { online: true, quotaExceeded: false };
+  } catch (error: any) {
+    if (isQuotaError(error)) {
+      markQuotaLimitActive(10);
+      return { online: false, quotaExceeded: true, message: error?.message || 'Quota exceeded' };
+    }
+    if (error?.message?.includes('permission-denied') || error?.code === 'permission-denied') {
+      clearQuotaLimit();
+      return { online: true, quotaExceeded: false };
+    }
+    return { online: false, quotaExceeded: false, message: error?.message || 'Connection failed' };
+  }
+}
+
 export function getCachedData<T>(key: string, maxAgeMinutes: number = 15): T | null {
   if (typeof window === 'undefined') return null;
   try {
@@ -146,23 +178,33 @@ async function testConnection() {
     const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 4000));
     
     await Promise.race([pingPromise, timeoutPromise]);
+    clearQuotaLimit();
     if (!hasDispatchedStatus) {
-      window.dispatchEvent(new CustomEvent('firestore-connection-status', { detail: { isOffline: false } }));
+      window.dispatchEvent(new CustomEvent('firestore-connection-status', { detail: { isOffline: false, quotaExceeded: false } }));
       hasDispatchedStatus = true;
     }
   } catch (error) {
+    if (isQuotaError(error)) {
+      markQuotaLimitActive(10);
+      console.warn("Firestore connection check: Daily read units quota limit exceeded on cloud project.");
+      window.dispatchEvent(new CustomEvent('firestore-connection-status', { detail: { isOffline: true, quotaExceeded: true } }));
+      window.dispatchEvent(new CustomEvent('firestore-quota-exceeded', { detail: { quotaExceeded: true, error } }));
+      hasDispatchedStatus = true;
+      return;
+    }
     if (error instanceof Error) {
       if (error.message.includes('permission-denied') || (error as any).code === 'permission-denied') {
         // Under security rules, /test/connection is locked. Reaching it is a successful hand-shake!
         console.log("Firestore connection test: Successfully reached Firestore backend (access securely managed by rules).");
+        clearQuotaLimit();
         if (!hasDispatchedStatus) {
-          window.dispatchEvent(new CustomEvent('firestore-connection-status', { detail: { isOffline: false } }));
+          window.dispatchEvent(new CustomEvent('firestore-connection-status', { detail: { isOffline: false, quotaExceeded: false } }));
           hasDispatchedStatus = true;
         }
       } else {
         console.warn("Firestore connection test: Backend is offline, blocked, or timed out. Firestore is operating in offline mode.");
         if (!hasDispatchedStatus) {
-          window.dispatchEvent(new CustomEvent('firestore-connection-status', { detail: { isOffline: true } }));
+          window.dispatchEvent(new CustomEvent('firestore-connection-status', { detail: { isOffline: true, quotaExceeded: false } }));
           hasDispatchedStatus = true;
         }
       }
